@@ -61,6 +61,10 @@ input{font:inherit;color:inherit}
 .pr{position:relative}
 .pin{position:absolute;top:-9px;left:-9px;z-index:30;width:19px;height:19px;border-radius:50%;background:var(--pin);color:#1a0716;font:700 11px/19px var(--sys);text-align:center;box-shadow:0 0 0 3px rgba(255,95,210,.22),0 4px 10px rgba(0,0,0,.45);pointer-events:none;font-stretch:100%;letter-spacing:0}
 body.no-pins .stage .pin{display:none}
+.app-only .ws-bar,.app-only .ws-intro,.app-only .ws-foot{display:none}
+.app-only .ws-stage{max-width:none;margin:0;padding:0}
+.frame.solo{width:100vw;height:100vh;border:0;border-radius:0;box-shadow:none}
+.ph.solo{width:100vw;height:100vh;border-radius:0}
 
 /* Test-ID overlay */
 body.tids .stage [data-testid]{outline:1.5px dashed #46BFE0;outline-offset:1px}
@@ -352,13 +356,13 @@ body.tids .stage button[data-testid],body.tids .stage div[data-testid],body.tids
 const GLOW=['#F2545B','#FB8C45','#F2C14E','#6CCF8E','#46BFE0','#8E92F8','#C39BF2'];
 const DEEP=['#B3262D','#A8461A','#876008','#1D6A44','#156A88','#3B3EA8','#6A33A0'];
 const BAND={from:3.0,to:3.6};
-const N=371;
-const TODAY=new Date(2026,9,6);
-const DATES=[],DOW=[];
-for(let i=0;i<N;i++){const d=new Date(2026,9,6-(N-1-i));DATES.push(d);DOW.push((d.getDay()+6)%7)}
-const MON0=N-1-DOW[N-1];
+let N,TODAY,DATES,DOW,MON0,NOW='18:10';
+function setDays(today,n){N=n;TODAY=today;DATES=[];DOW=[];
+  for(let i=0;i<N;i++){const d=new Date(today.getFullYear(),today.getMonth(),today.getDate()-(N-1-i));DATES.push(d);DOW.push((d.getDay()+6)%7)}
+  MON0=N-1-DOW[N-1]}
+setDays(new Date(2026,9,6),371);
 
-const HABITS=[
+let HABITS=[
   {id:'water',name:{de:'Wasser trinken',en:'Drink water'},icon:'drop',stage:5,rhythm:'daily',target:8,reminder:'09:00',rate:.6,force:12},
   {id:'run',name:{de:'Laufen',en:'Run'},icon:'route',stage:1,rhythm:'weekly',times:3,target:1,reminder:'07:00',rate:.42,force:4},
   {id:'read',name:{de:'Lesen, 20 Minuten',en:'Read for 20 minutes'},icon:'book',stage:6,rhythm:'daily',target:1,reminder:'21:30',rate:.72,force:22},
@@ -367,7 +371,7 @@ const HABITS=[
   {id:'vitd',name:{de:'Vitamin D nehmen',en:'Take vitamin D'},icon:'sun',stage:3,rhythm:'daily',target:1,reminder:'08:00',rate:.86,force:40},
   {id:'guitar',name:{de:'Gitarre üben',en:'Practice guitar'},icon:'note',stage:2,rhythm:'days',days:[0,2,4],target:1,reminder:'18:30',rate:.7,force:9},
 ];
-const ARCHIVED=[{id:'floss',name:{de:'Zahnseide',en:'Floss'},icon:'leaf',stage:4,rhythm:'daily',target:1,reminder:null,hist:new Array(N).fill(0)}];
+let ARCHIVED=[{id:'floss',name:{de:'Zahnseide',en:'Floss'},icon:'leaf',stage:4,rhythm:'daily',target:1,reminder:null,hist:new Array(N).fill(0)}];
 
 function rng(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 HABITS.forEach((h,k)=>{
@@ -388,8 +392,26 @@ HABITS.forEach((h,k)=>{
     while(h.rhythm==='days'&&!h.days.includes(DOW[i]))i--;
     a[i]=0;
   }
-  h.hist=a;
+  h.hist=a;h.c0=0;h.ord=k;
 });
+ARCHIVED[0].c0=0;ARCHIVED[0].ord=99;
+
+// Loads a seed dataset from harness/seed (format stackarena-seed) instead of the sample data
+function loadSeed(d){
+  const [y,m,dd]=d.today.split('-').map(Number),today=new Date(y,m-1,dd);
+  const fmt=new Intl.DateTimeFormat('en-CA',{timeZone:d.timeZone,year:'numeric',month:'2-digit',day:'2-digit'});
+  const off=date=>{const [a,b,c]=date.split('-').map(Number);return Math.round((new Date(a,b-1,c)-today)/864e5)};
+  const first=Math.min(0,...d.habits.map(h=>off(fmt.format(new Date(h.createdAt)))));
+  setDays(today,Math.max(371,1-first));
+  const order=(a,b)=>a.createdAt===b.createdAt?(a.id<b.id?-1:1):Date.parse(a.createdAt)-Date.parse(b.createdAt);
+  const all=d.habits.slice().sort(order).map((h,k)=>({id:h.id,name:{de:h.name,en:h.name},icon:h.icon,stage:h.color,rhythm:h.rhythm.type,
+    times:h.rhythm.timesPerWeek,days:h.rhythm.days,target:h.targetPerDay,reminder:h.reminder,archived:h.archivedAt!==null,
+    c0:N-1+off(fmt.format(new Date(h.createdAt))),ord:k,hist:new Array(N).fill(0)}));
+  S.counts={};all.forEach(h=>S.counts[h.id]=0);
+  for(const c of d.checkins){const h=all.find(x=>x.id===c.habitId),i=N-1+off(c.date);
+    if(!h||i<0||i>N-1)continue;if(i===N-1)S.counts[h.id]=c.count;else h.hist[i]=c.count}
+  HABITS=all.filter(h=>!h.archived);ARCHIVED=all.filter(h=>h.archived);
+  const now=new Date();NOW=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`}
 
 const S={device:'desktop',theme:'dark',lang:'de',notes:true,tids:false,offline:false,pending:0,banner:false,bump:null,
   counts:{water:3,run:0,read:1,meditate:1,phone:0,vitd:1,guitar:0},
@@ -497,28 +519,30 @@ const pin=n=>`<span class="pin">${n}</span>`;
 const hc=h=>(S.theme==='dark'?GLOW:DEEP)[h.stage-1];
 const byId=id=>HABITS.find(h=>h.id===id)||ARCHIVED.find(h=>h.id===id);
 const countAt=(h,i)=>i===N-1?(S.counts[h.id]||0):h.hist[i];
-const isDue=(h,i)=>h.rhythm!=='days'||h.days.includes(DOW[i]);
+const isDue=(h,i)=>i>=h.c0&&(h.rhythm!=='days'||h.days.includes(DOW[i]));
 const isDone=(h,i)=>countAt(h,i)>=h.target;
-function weekCount(h,mon){let c=0;for(let d=0;d<7;d++){const i=mon+d;if(i>=0&&i<N&&countAt(h,i)>0)c++}return c}
-function dueToday(h){if(h.rhythm==='days')return isDue(h,N-1);if(h.rhythm==='weekly')return weekCount(h,MON0)-(countAt(h,N-1)>0?1:0)<h.times;return true}
+function weekCount(h,mon){let c=0;for(let d=0;d<7;d++){const i=mon+d;if(i>=0&&i<N&&isDone(h,i))c++}return c}
+function dueToday(h){if(h.rhythm==='days')return isDue(h,N-1);if(h.rhythm==='weekly')return weekCount(h,MON0)-(isDone(h,N-1)?1:0)<h.times;return true}
 function streak(h){
-  if(h.rhythm==='weekly'){let s=weekCount(h,MON0)>=h.times?1:0;for(let m=MON0-7;m>=0;m-=7){if(weekCount(h,m)>=h.times)s++;else break}return s}
+  if(h.rhythm==='weekly'){let s=weekCount(h,MON0)>=h.times?1:0;for(let m=MON0-7;m+6>=h.c0;m-=7){if(weekCount(h,m)>=h.times)s++;else break}return s}
   let i=N-1;if(!isDone(h,i))i--;let s=0;
   for(;i>=0;i--){if(!isDue(h,i))continue;if(isDone(h,i))s++;else break}return s}
 function longest(h){
   let best=0,run=0;
-  if(h.rhythm==='weekly'){for(let m=MON0%7;m<=MON0;m+=7){if(weekCount(h,m)>=h.times){run++;best=Math.max(best,run)}else if(m!==MON0)run=0}return Math.max(best,streak(h))}
+  if(h.rhythm==='weekly'){for(let m=h.c0-DOW[h.c0];m<=MON0;m+=7){if(weekCount(h,m)>=h.times){run++;best=Math.max(best,run)}else if(m!==MON0)run=0}return Math.max(best,streak(h))}
   for(let i=0;i<N;i++){if(!isDue(h,i))continue;if(isDone(h,i)){run++;best=Math.max(best,run)}else if(i!==N-1)run=0}return Math.max(best,streak(h))}
-function rangeStat(h,a,b){a=Math.max(0,a);b=Math.min(N-1,b);if(b<a)return{done:0,due:0};
-  if(h.rhythm==='weekly'){let d=0;for(let i=a;i<=b;i++)if(countAt(h,i)>0)d++;const due=h.times*(b-a+1)/7;return{done:Math.min(d,due),due}}
+function rangeStat(h,a,b){a=Math.max(h.c0,a);b=Math.min(N-1,b);if(b<a)return{done:0,due:0};
+  if(h.rhythm==='weekly'){let d=0;for(let i=a;i<=b;i++)if(isDone(h,i))d++;const due=h.times*(b-a+1)/7;return{done:Math.min(d,due),due}}
   let done=0,due=0;for(let i=a;i<=b;i++){if(!isDue(h,i))continue;due++;done+=Math.min(1,countAt(h,i)/h.target)}return{done,due}}
 const rate=(list,a,b)=>{let d=0,u=0;list.forEach(h=>{const r=rangeStat(h,a,b);d+=r.done;u+=r.due});return u?d/u:0};
 const idxOf=d=>N-1-Math.round((TODAY-d)/864e5);
 function periods(range){
   const out=[];
-  if(range==='week'){for(let k=11;k>=0;k--){const a=MON0-7*k;out.push({a,b:Math.min(a+6,N-1),l:t('kw')(41-k)})}}
-  else{for(let k=11;k>=0;k--){const s=new Date(2026,9-k,1),e=new Date(2026,10-k,0);out.push({a:idxOf(s),b:Math.min(idxOf(e),N-1),l:MO[S.lang][s.getMonth()]})}}
+  const Y=TODAY.getFullYear(),M=TODAY.getMonth();
+  if(range==='week'){for(let k=11;k>=0;k--){const a=MON0-7*k;out.push({a,b:Math.min(a+6,N-1),l:t('kw')(isoWeek(new Date(Y,M,TODAY.getDate()-(N-1-a))))})}}
+  else{for(let k=11;k>=0;k--){const s=new Date(Y,M-k,1),e=new Date(Y,M-k+1,0);out.push({a:idxOf(s),b:Math.min(idxOf(e),N-1),l:MO[S.lang][s.getMonth()]})}}
   return out}
+function isoWeek(d){const u=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));u.setUTCDate(u.getUTCDate()+3-(u.getUTCDay()+6)%7);const j=new Date(Date.UTC(u.getUTCFullYear(),0,4));return 1+Math.round(((u-j)/864e5-3+(j.getUTCDay()+6)%7)/7)}
 const unitFor=(h,n)=>h.rhythm==='weekly'?t('unitW')(n):h.rhythm==='days'?t('unitX')(n):t('unitD')(n);
 const streakText=h=>{const s=streak(h);return h.rhythm==='weekly'?t('streakW')(s):h.rhythm==='days'?t('streakX')(s):t('streakD')(s)};
 const rhythmText=h=>h.rhythm==='weekly'?t('timesWeek')(h.times):h.rhythm==='days'?h.days.map(d=>WD[S.lang][d]).join(', '):(h.target>1?t('dailyN')(h.target):t('daily'));
@@ -542,7 +566,7 @@ function syncBadge(){return `<button class="sync pr ${S.offline?'off':''}" data-
 function newBtn(phone){return phone?`<button class="icbtn pri" data-act="new" data-testid="habit.new" aria-label="${t('newHabit')}">${ic('plus',20)}</button>`:`<button class="btn pri" data-act="new" data-testid="habit.new">${ic('plus',18)}${t('newHabit')}</button>`}
 function control(h,prefix){
   const c=countAt(h,N-1),id=prefix||`today.habit.${h.id}`;
-  if(h.target>1)return `<div class="stepper" style="--hc:${hc(h)}"><button class="stp" data-act="dec" data-id="${h.id}" aria-label="${t('less')}: ${esc(nm(h))}" data-testid="${id}.dec" ${c===0?'disabled':''}>${ic('minus',16)}</button><span class="cnt" aria-live="polite"><b>${c}</b>/${h.target}</span><button class="stp plus" data-act="inc" data-id="${h.id}" aria-label="${t('more')}: ${esc(nm(h))}" data-testid="${id}.inc">${ic('plus',16)}</button></div>`;
+  if(h.target>1)return `<div class="stepper" style="--hc:${hc(h)}"><button class="stp" data-act="dec" data-id="${h.id}" aria-label="${t('less')}: ${esc(nm(h))}" data-testid="${id}.dec" ${c===0?'disabled':''}>${ic('minus',16)}</button><span class="cnt" aria-live="polite"><b data-testid="${id}.count">${c}</b>/${h.target}</span><button class="stp plus" data-act="inc" data-id="${h.id}" aria-label="${t('more')}: ${esc(nm(h))}" data-testid="${id}.inc">${ic('plus',16)}</button></div>`;
   const on=c>=1;return `<button class="check ${on?'on':''}" style="--hc:${hc(h)}" data-act="toggle" data-id="${h.id}" aria-pressed="${on}" aria-label="${esc(nm(h))} ${t('check')}" data-testid="${id}.check">${ic('check',19)}</button>`}
 const segs=(h,c)=>`<span class="segs" aria-hidden="true">${Array.from({length:h.target},(_,k)=>`<i class="${k<c?'on':''}"></i>`).join('')}</span>`;
 function rangeSeg(F,ctx){return `<div class="seg" role="tablist"><button role="tab" class="${F.range==='week'?'on':''}" aria-selected="${F.range==='week'}" data-act="range" data-v="week" data-testid="${ctx}.range.week">${t('weeks')}</button><button role="tab" class="${F.range==='month'?'on':''}" aria-selected="${F.range==='month'}" data-act="range" data-v="month" data-testid="${ctx}.range.month">${t('months')}</button></div>`}
@@ -553,7 +577,7 @@ function heatmap(h,cell,gap){
   for(let c=0;c<53;c++){
     const fi=start+c*7;
     if(fi>=0&&fi<N){const m=DATES[fi].getMonth();if(m!==lastM){if(lastM!==-1||c===0)months+=`<text class="ax" x="${left+c*step}" y="10">${MO[S.lang][m]}</text>`;lastM=m}}
-    for(let r=0;r<7;r++){const i=start+c*7+r;if(i<0||i>N-1)continue;
+    for(let r=0;r<7;r++){const i=start+c*7+r;if(i<h.c0||i>N-1)continue;
       const v=countAt(h,i);let cls;
       if(!isDue(h,i)&&v===0)cls='nd';else if(v===0)cls='l0';else if(h.target>1){const q=v/h.target;cls=q>=1?'l4':q>=.6?'l3':q>=.3?'l2':'l1'}else cls='l4';
       s+=`<rect class="${cls}${i===N-1?' tdy':''}" x="${left+c*step}" y="${top+r*step}" width="${cell}" height="${cell}" rx="2"/>`}
@@ -579,17 +603,17 @@ function rowA(h,first){
   return `<div class="row ${S.bump===h.id?'bump':''}" style="--hc:${hc(h)}" data-testid="today.habit.${h.id}">
     <button class="row-main" data-act="detail" data-id="${h.id}" data-testid="today.habit.${h.id}.open">
       <span class="chip pr">${ic(h.icon,20)}${first?pin(3):''}</span>
-      <span class="row-tx"><span class="row-name">${esc(nm(h))}</span><span class="row-meta">${metaParts(h).map(s=>`<span>${s}</span>`).join('')}</span>${h.target>1?segs(h,c):''}</span>
+      <span class="row-tx"><span class="row-name" data-testid="today.habit.${h.id}.name">${esc(nm(h))}</span><span class="row-meta">${metaParts(h).map(s=>`<span>${s}</span>`).join('')}</span>${h.target>1?segs(h,c):''}</span>
     </button>
     <div class="pr">${control(h)}${first?pin(7):''}</div></div>`}
-function rowND(h){return `<div class="row nd" style="--hc:${hc(h)}" data-testid="today.habit.${h.id}"><button class="row-main" data-act="detail" data-id="${h.id}" data-testid="today.habit.${h.id}.open"><span class="chip">${ic(h.icon,20)}</span><span class="row-tx"><span class="row-name">${esc(nm(h))}</span><span class="row-meta"><span>${rhythmText(h)}</span><span>${streakText(h)}</span></span></span></button><span class="nd-next">${t('next')(nextDue(h))}</span></div>`}
+function rowND(h){return `<div class="row nd" style="--hc:${hc(h)}" data-testid="today.habit.${h.id}"><button class="row-main" data-act="detail" data-id="${h.id}" data-testid="today.habit.${h.id}.open"><span class="chip">${ic(h.icon,20)}</span><span class="row-tx"><span class="row-name" data-testid="today.habit.${h.id}.name">${esc(nm(h))}</span><span class="row-meta"><span>${rhythmText(h)}</span><span>${streakText(h)}</span></span></span></button><span class="nd-next">${t('next')(nextDue(h))}</span></div>`}
 
 function todayA(phone){
   const due=dueList(),done=due.filter(h=>isDone(h,N-1)).length,not=notList();
   const head=phone
     ?`<div class="ph-head"><div class="pr"><h1 class="disp date">${fmtDate(true)}</h1>${pin(2)}</div>${newBtn(true)}</div>${syncBadge()}`
     :`<div class="th-row"><div class="pr"><h1 class="disp date">${fmtDate(false)}</h1>${pin(2)}</div>${newBtn(false)}</div>`;
-  const prog=`<div class="prog">${t('doneOf')(done,due.length)}</div><div class="bar" role="progressbar" aria-valuemin="0" aria-valuenow="${done}" aria-valuemax="${due.length}"><i style="width:${due.length?done/due.length*100:0}%"></i></div>`;
+  const prog=`<div class="prog">${t('doneOf')(`<span data-testid="today.progress.done">${done}</span>`,`<span data-testid="today.progress.due">${due.length}</span>`)}</div><div class="bar" role="progressbar" aria-valuemin="0" aria-valuenow="${done}" aria-valuemax="${due.length}"><i style="width:${due.length?done/due.length*100:0}%"></i></div>`;
   const list=`<div class="list">${due.map((h,k)=>rowA(h,k===0)).join('')}</div>`;
   const nd=not.length?`<div class="pr"><h2 class="grp-h">${t('notToday')}</h2>${pin(8)}</div><div class="list">${not.map(rowND).join('')}</div>`:'';
   if(phone)return head+prog+list+nd;
@@ -597,10 +621,11 @@ function todayA(phone){
 function railA(){
   const days=WD[S.lang].map((l,k)=>{const i=MON0+k,fut=i>N-1;const list=HABITS.filter(h=>h.rhythm!=='weekly');return{l,fut,today:i===N-1,r:fut?0:rate(list,i,i)}});
   const best=HABITS.map(h=>({h,s:streak(h)})).filter(x=>x.h.rhythm==='daily').sort((a,b)=>b.s-a.s)[0];
+  const next=dueList().filter(h=>h.reminder&&h.reminder>=NOW&&!isDone(h,N-1)).sort((a,b)=>a.reminder<b.reminder?-1:1)[0];
   return `<aside class="rail pr">${pin(9)}<h2 class="rail-h">${t('thisWeek')}</h2>
     <div class="wk" role="img" aria-label="${t('thisWeek')}">${days.map(d=>`<div class="wk-d ${d.today?'today':''} ${d.fut?'fut':''}"><div class="wk-bar"><i style="height:${d.r*100}%"></i></div><span>${d.l}</span></div>`).join('')}</div>
-    <div class="rail-stat"><span class="disp big">${best.s}</span><span>${t('bestRunning')(esc(nm(best.h)))}</span></div>
-    <div class="rail-stat"><span class="disp big">21:45</span><span>${t('nextRem')('21:45',esc(nm(byId('phone'))))}</span></div></aside>`}
+    ${best?`<div class="rail-stat"><span class="disp big">${best.s}</span><span>${t('bestRunning')(esc(nm(best.h)))}</span></div>`:''}
+    ${next?`<div class="rail-stat"><span class="disp big">${next.reminder}</span><span>${t('nextRem')(next.reminder,esc(nm(next)))}</span></div>`:''}</aside>`}
 
 function detail(F,id,phone){
   const h=byId(id);if(!h)return '';
@@ -609,12 +634,12 @@ function detail(F,id,phone){
   const w=phone?318:770;
   const bar=phone?`<div class="ph-bar"><button class="back" data-act="back" data-testid="detail.back">${ic('chevL',22)}<span>${t('today')}</span></button><button class="icbtn" data-act="edit" data-id="${h.id}" data-testid="detail.edit" aria-label="${t('edit')}">${ic('pen',18)}</button></div>`:'';
   return `<div class="detail" style="--hc:${hc(h)}">${bar}
-    <div class="d-head"><span class="chip lg">${ic(h.icon,phone?24:28)}</span><div><h1 class="disp d-name">${esc(nm(h))}</h1><div class="row-meta"><span>${rhythmText(h)}</span>${h.reminder?`<span>${ic('bell',13)} ${h.reminder}</span>`:''}</div></div>
+    <div class="d-head"><span class="chip lg">${ic(h.icon,phone?24:28)}</span><div><h1 class="disp d-name" data-testid="detail.name">${esc(nm(h))}</h1><div class="row-meta"><span>${rhythmText(h)}</span>${h.reminder?`<span>${ic('bell',13)} ${h.reminder}</span>`:''}</div></div>
     ${!phone?`<div class="d-act"><button class="btn sec" data-act="edit" data-id="${h.id}" data-testid="detail.edit">${ic('pen',16)}${t('edit')}</button></div>`:''}</div>
     <div class="d-today ${S.bump===h.id?'bump':''}"><span>${t('todayLbl')}</span>${control(h,'detail.today')}</div>
     <div class="d-stats"><div class="st"><span class="disp num" data-testid="detail.streak.current">${cur}</span><span class="st-l">${t('curStreak')}</span><span class="st-u">${unitFor(h,cur)}</span></div>
       <div class="st"><span class="disp num" data-testid="detail.streak.longest">${lng}</span><span class="st-l">${t('longStreak')}</span><span class="st-u">${unitFor(h,lng)}</span></div>
-      <div class="st"><span class="disp num">${Math.round(r*100)}<small>%</small></span><span class="st-l">${t('rate30')}</span><span class="st-u">${t('rate30u')}</span></div></div>
+      <div class="st"><span class="disp num" data-testid="detail.rate30">${Math.round(r*100)}<small>%</small></span><span class="st-l">${t('rate30')}</span><span class="st-u">${t('rate30u')}</span></div></div>
     <section class="card pr">${pin(5)}<h2 class="card-h">${t('last12')}</h2><div class="hm-scroll" data-testid="detail.heatmap">${heatmap(h,phone?9:11,phone?2:3)}</div>${legend(h)}</section>
     <section class="card"><div class="card-hrow"><h2 class="card-h">${t('ratePer')}</h2>${rangeSeg(F,'detail')}</div><div data-testid="detail.chart">${lineChart(vals,ps.map(p=>p.l),w,phone?170:210,hc(h),phone?3:2)}</div></section></div>`}
 
@@ -625,14 +650,14 @@ function stats(F,phone){
   const w=phone?318:780;
   return `<div style="max-width:880px"><div class="${phone?'':'th-row'}"><h1 class="disp date" style="${phone?'margin-top:8px':''}">${t('stats')}</h1>${phone?'':rangeSeg(F,'stats')}</div>
     ${phone?`<div style="margin-top:14px">${rangeSeg(F,'stats')}</div>`:''}
-    <div class="s-sum"><span class="disp num">${cur}<small>%</small></span><div><div style="font-weight:600">${t(F.range==='week'?'thisWeekRate':'thisMonthRate')}</div><div class="muted">${t('delta')(cur-prev,F.range==='week')}</div></div></div>
+    <div class="s-sum"><span class="disp num" data-testid="stats.rate">${cur}<small>%</small></span><div><div style="font-weight:600">${t(F.range==='week'?'thisWeekRate':'thisMonthRate')}</div><div class="muted">${t('delta')(cur-prev,F.range==='week')}</div></div></div>
     <section class="card pr">${pin(5)}<h2 class="card-h">${t('rateOver')}</h2><div data-testid="stats.chart.rate">${lineChart(vals,ps.map(p=>p.l),w,phone?190:240,null,phone?3:1)}</div></section>
-    <section class="card"><h2 class="card-h">${t('compare')}</h2><div class="bars" data-testid="stats.chart.compare">${bars.map(({h,r})=>`<div class="br" style="--hc:${hc(h)}"><span class="br-n">${ic(h.icon,15)}${esc(nm(h))}</span><span class="br-t"><i style="width:${r*100}%"></i></span><span class="br-v">${Math.round(r*100)} %</span></div>`).join('')}</div></section></div>`}
+    <section class="card"><h2 class="card-h">${t('compare')}</h2><div class="bars" data-testid="stats.chart.compare">${bars.map(({h,r})=>`<div class="br" style="--hc:${hc(h)}"><span class="br-n">${ic(h.icon,15)}${esc(nm(h))}</span><span class="br-t"><i style="width:${r*100}%"></i></span><span class="br-v" data-testid="stats.compare.${h.id}">${Math.round(r*100)} %</span></div>`).join('')}</div></section></div>`}
 
 function habitsScreen(phone){
   return `<div style="max-width:760px"><div class="${phone?'ph-head':'th-row'}"><h1 class="disp date">${t('habits')}</h1>${newBtn(phone)}</div>
-  <div class="list" style="margin-top:18px">${HABITS.map(h=>`<div class="row" style="--hc:${hc(h)}"><span class="chip">${ic(h.icon,20)}</span><span class="row-tx" style="flex:1"><span class="row-name">${esc(nm(h))}</span><span class="row-meta"><span>${rhythmText(h)}</span>${h.reminder?`<span>${ic('bell',12)} ${h.reminder}</span>`:''}</span></span><button class="icbtn" data-act="edit" data-id="${h.id}" data-testid="habits.${h.id}.edit" aria-label="${t('edit')}: ${esc(nm(h))}">${ic('pen',17)}</button></div>`).join('')}</div>
-  <h2 class="grp-h">${t('archive')} (${ARCHIVED.length})</h2><div class="list">${ARCHIVED.map(h=>`<div class="row nd" style="--hc:${hc(h)}"><span class="chip">${ic(h.icon,20)}</span><span class="row-tx" style="flex:1"><span class="row-name">${esc(nm(h))}</span><span class="row-meta"><span>${rhythmText(h)}</span></span></span><button class="btn sec sm" data-act="restore" data-id="${h.id}" data-testid="habits.${h.id}.restore">${t('restore')}</button></div>`).join('')}</div></div>`}
+  <div class="list" style="margin-top:18px">${HABITS.map(h=>`<div class="row" style="--hc:${hc(h)}"><span class="chip">${ic(h.icon,20)}</span><span class="row-tx" style="flex:1"><span class="row-name" data-testid="habits.${h.id}.name">${esc(nm(h))}</span><span class="row-meta"><span>${rhythmText(h)}</span>${h.reminder?`<span>${ic('bell',12)} ${h.reminder}</span>`:''}</span></span><button class="icbtn" data-act="edit" data-id="${h.id}" data-testid="habits.${h.id}.edit" aria-label="${t('edit')}: ${esc(nm(h))}">${ic('pen',17)}</button></div>`).join('')}</div>
+  <h2 class="grp-h">${t('archive')} (${ARCHIVED.length})</h2><div class="list">${ARCHIVED.map(h=>`<div class="row nd" style="--hc:${hc(h)}"><span class="chip">${ic(h.icon,20)}</span><span class="row-tx" style="flex:1"><span class="row-name" data-testid="habits.${h.id}.name">${esc(nm(h))}</span><span class="row-meta"><span>${rhythmText(h)}</span></span></span><button class="btn sec sm" data-act="restore" data-id="${h.id}" data-testid="habits.${h.id}.restore">${t('restore')}</button></div>`).join('')}</div></div>`}
 
 function settings(phone){
   return `<div style="max-width:680px"><h1 class="disp date" style="${phone?'margin-top:8px':''}">${t('settings')}</h1>
@@ -669,8 +694,8 @@ function editForm(F,phone){
   ${phone?(isNew?'':`<button class="btn ghost danger wide" style="margin-top:28px" data-act="archive" data-testid="form.archive">${ic('archive',16)}${t('archiveBtn')}</button>`)
    :`<div class="m-actions">${isNew?'':`<button class="btn ghost danger" data-act="archive" data-testid="form.archive">${ic('archive',16)}${t('archiveBtn')}</button>`}<span class="spacer"></span><button class="btn sec" data-act="cancel" data-testid="form.cancel">${t('cancel')}</button><button class="btn pri" data-act="save" data-testid="form.save">${t(isNew?'create':'save')}</button></div>`}</div>`}
 
-const toastEl=F=>F.toast?`<div class="toast" role="status">${F.toast}</div>`:'';
-const banner=()=>S.banner?`<div class="notif" role="status">${sign(38)}<div><b>Takt</b><span class="nt">${esc(nm(byId('water')))}</span><span>${t('notifBody')}</span></div><span class="ntime">${t('now')}</span></div>`:'';
+const toastEl=F=>F.toast?`<div class="toast" role="status" data-testid="toast">${F.toast}</div>`:'';
+const banner=()=>S.banner?`<div class="notif" role="status">${sign(38)}<div><b>Takt</b><span class="nt">${esc(nm(HABITS.find(h=>h.target>1)||HABITS[0]))}</span><span>${t('notifBody')}</span></div><span class="ntime">${t('now')}</span></div>`:'';
 
 function screenContent(F,phone){
   switch(F.screen){
@@ -724,19 +749,23 @@ function render(){
   document.querySelectorAll('[data-ws]').forEach(g=>g.querySelectorAll('button').forEach(b=>b.classList.toggle('on',S[g.dataset.ws]===b.dataset.v)));
   renderIntro();
   const th=S.theme==='dark'?'t-dark':'t-light';
-  if(S.device==='desktop'){stage.innerHTML=`<div class="desk-wrap"><div class="scaler"><div class="frame ${th}" data-f="0">${desktop(0)}</div></div></div>`;fit()}
+  if(S.app){stage.innerHTML=S.device==='desktop'?`<div class="frame solo ${th}" data-f="0">${desktop(0)}</div>`:`<div class="ph solo ${th}" data-f="1">${phone(1)}</div>`}
+  else if(S.device==='desktop'){stage.innerHTML=`<div class="desk-wrap"><div class="scaler"><div class="frame ${th}" data-f="0">${desktop(0)}</div></div></div>`;fit()}
   else{const caps=['','Starts on Today','Starts on the details','Starts on Statistics'];stage.innerHTML=`<div class="phones">${[1,2,3].map(f=>`<div class="phone-wrap"><div class="phone"><div class="ph ${th}" data-f="${f}">${phone(f)}</div></div><div class="phone-cap">${caps[f]}</div></div>`).join('')}</div>`}
   stage.querySelectorAll('[data-f]').forEach(fr=>{const f=fr.dataset.f,k=keep[f];
     fr.querySelectorAll('.hm-scroll').forEach(e=>e.scrollLeft=e.scrollWidth);
     if(k&&k.screen===S.frames[f].screen+(S.frames[f].modal||''))[...fr.querySelectorAll('.main,.ph-body,.modal')].forEach((e,i)=>{if(k.s[i]!=null)e.scrollTop=k.s[i]})});
 }
 window.addEventListener('resize',fit);
-new URLSearchParams(location.search).forEach((v,k)=>{if(k in S&&typeof S[k]==='string')S[k]=v;else if(k==='screen')S.frames.forEach(F=>F.screen=v)});
+// ?app=desktop|phone shows one bare frame, ?data=<url> loads a seed dataset (used by the E2E suite)
+const Q=new URLSearchParams(location.search);
+Q.forEach((v,k)=>{if(k in S&&typeof S[k]==='string')S[k]=v;else if(k==='screen')S.frames.forEach(F=>F.screen=v)});
+if(Q.get('app')){S.app=true;S.device=Q.get('app');S.notes=false;document.body.classList.add('app-only')}
 
 function toast(F,msg){F.toast=msg;render();clearTimeout(F._tt);F._tt=setTimeout(()=>{F.toast=null;render()},2200)}
 function newForm(){return{id:null,name:'',icon:'drop',stage:3,rhythm:'daily',times:3,days:[0,2,4],target:1,remind:true,time:'09:00'}}
 function formFrom(h){return{id:h.id,name:nm(h),icon:h.icon,stage:h.stage,rhythm:h.rhythm,times:h.times||3,days:(h.days||[0,2,4]).slice(),target:h.target,remind:!!h.reminder,time:h.reminder||'09:00'}}
-function changeCount(id,d){const h=byId(id);const c=S.counts[id]||0;const n=Math.max(0,Math.min(h.target*(h.target>1?1.5:1),c+d));if(n===c)return;S.counts[id]=Math.round(n);if(S.offline)S.pending++;S.bump=id}
+function changeCount(id,d){const h=byId(id);const c=S.counts[id]||0;const n=Math.max(0,Math.min(h.target>1?99:1,c+d));if(n===c)return;S.counts[id]=n;if(S.offline)S.pending++;S.bump=id}
 const isPhoneFrame=f=>f>0;
 function act(a,el,f){
   const F=S.frames[f],ph=isPhoneFrame(f),id=el.dataset.id;
@@ -755,11 +784,11 @@ function act(a,el,f){
     case 'fday':{const k=+el.dataset.v,ds=F.form.days;F.form.days=ds.includes(k)?ds.filter(x=>x!==k):[...ds,k].sort();break}
     case 'cancel':closeForm(F,ph);break;
     case 'save':{const m=F.form;if(!m.name.trim()){const inp=el.closest('[data-f]').querySelector('[data-testid="form.name"]');inp&&inp.focus();return}
-      let h;if(m.id){h=byId(m.id)}else{h={id:'h'+Date.now(),name:{},hist:new Array(N).fill(0)};HABITS.push(h);S.counts[h.id]=0}
+      let h;if(m.id){h=byId(m.id)}else{h={id:crypto.randomUUID(),name:{},hist:new Array(N).fill(0),c0:N-1,ord:Date.now()};HABITS.push(h);S.counts[h.id]=0}
       Object.assign(h,{name:{de:m.name,en:m.name},icon:m.icon,stage:m.stage,rhythm:m.rhythm,times:m.times,days:m.days.slice(),target:m.target,reminder:m.remind?m.time:null});
       if(S.offline)S.pending++;closeForm(F,ph);toast(F,S.offline?t('savedOff'):t(m.id?'saved':'created'));return}
     case 'archive':{const i=HABITS.findIndex(h=>h.id===F.form.id);if(i>=0)ARCHIVED.push(...HABITS.splice(i,1));F.modal=null;F.screen=ph?'habits':(F.screen==='detail'?'today':F.screen);toast(F,t('archived'));return}
-    case 'restore':{const i=ARCHIVED.findIndex(h=>h.id===id);if(i>=0){const h=ARCHIVED.splice(i,1)[0];HABITS.push(h);if(S.counts[h.id]==null)S.counts[h.id]=0}toast(F,t('restored'));return}
+    case 'restore':{const i=ARCHIVED.findIndex(h=>h.id===id);if(i>=0){const h=ARCHIVED.splice(i,1)[0];HABITS.push(h);HABITS.sort((a,b)=>a.ord-b.ord);if(S.counts[h.id]==null)S.counts[h.id]=0}toast(F,t('restored'));return}
     case 'syncnow':if(S.offline){toast(F,t('offline')(S.pending));return}toast(F,t('syncedNow'));return;
     case 'file':toast(F,t('fileDlg'));return;
     case 'logout':F.screen='login';F.modal=null;break;
@@ -778,7 +807,7 @@ document.addEventListener('click',e=>{
   const fr=el.closest('[data-f]');if(!fr)return;e.preventDefault();act(el.dataset.act,el,+fr.dataset.f)});
 document.addEventListener('input',e=>{const b=e.target.dataset.bind;if(!b)return;const F=S.frames[+e.target.closest('[data-f]').dataset.f];if(F.form)F.form[b]=e.target.value});
 document.addEventListener('change',e=>{const k=e.target.dataset.wt;if(!k)return;S[k]=e.target.checked;if(k==='offline')S.pending=e.target.checked?3:0;render()});
-render();
+(async()=>{if(Q.get('data'))loadSeed(await (await fetch(Q.get('data'))).json());render()})();
 </script>
 </body>
 </html>
