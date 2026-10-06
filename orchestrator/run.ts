@@ -3,12 +3,11 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { parseArgs } from 'node:util';
+import { usage } from './usage';
 
 const REPO = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const MODEL = 'claude-opus-5-5';
 const EFFORT = 'xhigh';
-// List prices in $ per million tokens for MODEL; subscription runs are valued at these
-const PRICE = { input: 4, cacheWrite5m: 5, cacheWrite1h: 8, cacheRead: 0.2, output: 20 };
 
 const { values } = parseArgs({
   options: {
@@ -45,7 +44,7 @@ if (!token) throw new Error('CLAUDE_STACKARENA_TOKEN is missing in ~/.secrets (c
 // A fresh repository with spec and harness only. The reference API never enters it, and a separate
 // repository keeps it out of reach of git history as well.
 mkdirSync(`${runDir}/${folder}`, { recursive: true });
-mkdirSync(outDir, { recursive: true });
+mkdirSync(`${outDir}/session`, { recursive: true });
 sh(['bash', '-c', `git -C "${REPO}" archive HEAD spec harness | tar -x -C "${runDir}"`]);
 rmSync(`${runDir}/harness/reference`, { recursive: true, force: true });
 writeFileSync(`${runDir}/${folder}/.gitkeep`, '');
@@ -74,6 +73,7 @@ const env = {
   ...process.env,
   REPO,
   RUN_DIR: runDir,
+  OUT_DIR: outDir,
   GIT_NAME: `Team ${team.name}`,
   GIT_EMAIL: `${kind}-${slug}@stackarena.test`,
   CLAUDE_CODE_OAUTH_TOKEN: token,
@@ -101,32 +101,15 @@ clearTimeout(timer);
 const ended = new Date();
 sh(compose('down', '-v'), { env });
 
-// Usage from the transcript: one entry per API message, the final result if the run ended itself
-const usage = new Map<string, Record<string, any>>();
+// The final result event exists only if the agent ended the run itself
 let result: Record<string, any> | null = null;
 for (const line of readFileSync(`${outDir}/transcript.jsonl`, 'utf8').split('\n')) {
-  if (!line.trim()) continue;
-  let e: Record<string, any>;
+  if (!line.startsWith('{"type":"result"')) continue;
   try {
-    e = JSON.parse(line);
-  } catch {
-    continue;
-  }
-  if (e.type === 'assistant' && e.message?.usage) usage.set(e.message.id, e.message.usage);
-  if (e.type === 'result') result = e;
+    result = JSON.parse(line);
+  } catch {}
 }
-const tokens = { input: 0, cacheWrite5m: 0, cacheWrite1h: 0, cacheRead: 0, output: 0 };
-for (const u of usage.values()) {
-  tokens.input += u.input_tokens ?? 0;
-  tokens.output += u.output_tokens ?? 0;
-  tokens.cacheRead += u.cache_read_input_tokens ?? 0;
-  const split = u.cache_creation ?? {};
-  if (split.ephemeral_5m_input_tokens === undefined && split.ephemeral_1h_input_tokens === undefined)
-    tokens.cacheWrite5m += u.cache_creation_input_tokens ?? 0;
-  tokens.cacheWrite5m += split.ephemeral_5m_input_tokens ?? 0;
-  tokens.cacheWrite1h += split.ephemeral_1h_input_tokens ?? 0;
-}
-const estimated = Object.entries(tokens).reduce((sum, [k, n]) => sum + (n * PRICE[k as keyof typeof PRICE]) / 1e6, 0);
+const used = usage(outDir);
 const finalCommit = sh(['git', 'rev-parse', 'HEAD'], { cwd: runDir });
 const changed = sh(['git', 'diff', '--name-only', startCommit, finalCommit], { cwd: runDir }).split('\n').filter(Boolean);
 
@@ -144,9 +127,10 @@ const summary = {
   exitCode,
   outcome: result?.subtype ?? (timedOut ? 'time_limit' : 'no_result'),
   turns: result?.num_turns ?? null,
-  requests: usage.size,
-  tokens,
-  listPriceUsd: Math.round((result?.total_cost_usd ?? estimated) * 100) / 100,
+  requests: used.requests,
+  tokens: used.tokens,
+  usageSource: used.source,
+  listPriceUsd: Math.round((result?.total_cost_usd ?? used.usd) * 100) / 100,
   commits: Number(sh(['git', 'rev-list', '--count', `${startCommit}..${finalCommit}`], { cwd: runDir })),
   finalCommit,
   changedFiles: changed.length,

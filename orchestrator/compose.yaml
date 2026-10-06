@@ -35,6 +35,8 @@ services:
     working_dir: /work
     volumes:
       - ${RUN_DIR}:/work
+      # Claude Code's own session log holds the final token counts of every message
+      - ${OUT_DIR}/session:/home/agent/.claude/projects/-work
     environment:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
       DISABLE_AUTOUPDATER: "1"
