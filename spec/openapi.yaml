@@ -1,0 +1,431 @@
+openapi: 3.1.0
+info:
+  title: Stackarena Habit API
+  version: 1.0.0
+  description: |
+    Shared contract for every backend in the contest. Every client must work against every backend.
+
+    **Offline-first.** Clients keep a full local copy of the user's data and write only through
+    `POST /sync`. There are no other write endpoints for habits or check-ins.
+
+    **Conflicts** are resolved last-write-wins per record (one habit, or one check-in per habit and day):
+    the version with the later `updatedAt` wins; on equal `updatedAt` the larger `deviceId`
+    (byte-wise string comparison) wins. The server never changes `updatedAt` or `deviceId`.
+
+    **Dates.** `CheckIn.date` is the user's local calendar day. Timestamps are RFC 3339 in UTC,
+    set by the client clock. Streaks, rates and reminders are computed on the client.
+
+    **Errors** always have the body `{ "error": "<message>" }`. The message follows
+    `Accept-Language` (`de` or `en`, default `en`).
+
+    **Security.** Passwords are stored with Argon2id or bcrypt. Tokens are opaque, valid for
+    30 days and revoked by `POST /auth/logout`.
+servers:
+  - url: http://localhost:8080
+security:
+  - bearer: []
+tags:
+  - name: meta
+  - name: auth
+  - name: sync
+paths:
+  /health:
+    get:
+      tags: [meta]
+      operationId: getHealth
+      summary: Liveness check, also used to measure cold start
+      security: []
+      responses:
+        '200':
+          description: The server is up and can reach the database
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    const: ok
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /auth/register:
+    post:
+      tags: [auth]
+      operationId: register
+      summary: Create an account and start a session
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/AcceptLanguage'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Invalid'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Start a session
+      description: After 10 failed attempts for the same email within 15 minutes, further attempts answer 429 until the window has passed.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/AcceptLanguage'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/Invalid'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Revoke the current token
+      parameters:
+        - $ref: '#/components/parameters/AcceptLanguage'
+      responses:
+        '204':
+          description: Token revoked
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /me:
+    get:
+      tags: [auth]
+      operationId: getMe
+      summary: The signed-in user
+      parameters:
+        - $ref: '#/components/parameters/AcceptLanguage'
+      responses:
+        '200':
+          description: The user behind the token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /sync:
+    post:
+      tags: [sync]
+      operationId: sync
+      summary: Push local changes and pull everything that changed since the cursor
+      description: |
+        1. The server applies every pushed record with last-write-wins (see API description).
+           Losing records are dropped silently.
+        2. It answers with every stored record of the user that changed after `cursor`,
+           including the winners of this request, ordered by the server's change sequence.
+           `cursor: null` returns everything.
+        3. A response holds at most 5000 records in total. If `hasMore` is true, the client
+           calls again with the returned cursor and empty `habits` and `checkins`.
+
+        The whole push is applied atomically: either all records are validated and applied,
+        or the server answers with an error and changes nothing. A check-in must reference a
+        habit that belongs to the user, either already stored or part of the same request.
+      parameters:
+        - $ref: '#/components/parameters/AcceptLanguage'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncRequest'
+      responses:
+        '200':
+          description: Changes applied, delta since the cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/Invalid'
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: Opaque token from register or login
+  parameters:
+    AcceptLanguage:
+      name: Accept-Language
+      in: header
+      required: false
+      description: Language of error messages. Anything other than German falls back to English.
+      schema:
+        type: string
+        examples: [de, en, 'de-DE,de;q=0.9,en;q=0.8']
+  responses:
+    Unauthorized:
+      description: Missing, invalid or revoked token, or wrong email or password
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: The email is already registered
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Invalid:
+      description: The request body does not match the schema or breaks a rule from the description
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TooManyRequests:
+      description: Too many attempts, try again later
+      headers:
+        Retry-After:
+          description: Seconds until the next attempt is allowed
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unavailable:
+      description: The database is not reachable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+          minLength: 1
+    Credentials:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Compared case-insensitively
+        password:
+          type: string
+          minLength: 10
+          maxLength: 200
+    User:
+      type: object
+      required: [id, email, createdAt]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        createdAt:
+          type: string
+          format: date-time
+    Session:
+      type: object
+      required: [token, user]
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+          minLength: 32
+        user:
+          $ref: '#/components/schemas/User'
+    DeviceId:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[A-Za-z0-9_-]+$'
+      description: Stable per installation, generated by the client on first start
+    Icon:
+      type: string
+      enum: [drop, route, book, lotus, moon, sun, note, leaf, dumbbell, pen]
+    Rhythm:
+      oneOf:
+        - $ref: '#/components/schemas/RhythmDaily'
+        - $ref: '#/components/schemas/RhythmWeekly'
+        - $ref: '#/components/schemas/RhythmDays'
+      discriminator:
+        propertyName: type
+        mapping:
+          daily: '#/components/schemas/RhythmDaily'
+          weekly: '#/components/schemas/RhythmWeekly'
+          days: '#/components/schemas/RhythmDays'
+    RhythmDaily:
+      type: object
+      required: [type]
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          const: daily
+    RhythmWeekly:
+      type: object
+      required: [type, timesPerWeek]
+      additionalProperties: false
+      description: Due every day until the week (Monday to Sunday) has `timesPerWeek` days with at least one check-in
+      properties:
+        type:
+          type: string
+          const: weekly
+        timesPerWeek:
+          type: integer
+          minimum: 1
+          maximum: 6
+    RhythmDays:
+      type: object
+      required: [type, days]
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          const: days
+        days:
+          type: array
+          description: Weekdays, 0 is Monday and 6 is Sunday
+          minItems: 1
+          maxItems: 7
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 0
+            maximum: 6
+    Habit:
+      type: object
+      required: [id, name, icon, color, rhythm, targetPerDay, reminder, archivedAt, createdAt, updatedAt, deviceId]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Generated by the client
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        icon:
+          $ref: '#/components/schemas/Icon'
+        color:
+          type: integer
+          minimum: 1
+          maximum: 7
+          description: Stage of the colour band, see the mockup
+        rhythm:
+          $ref: '#/components/schemas/Rhythm'
+        targetPerDay:
+          type: integer
+          minimum: 1
+          maximum: 20
+          description: A day counts as done when the check-in count reaches this value
+        reminder:
+          type: [string, 'null']
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+          description: Local time of the daily reminder, or null for none
+        archivedAt:
+          type: [string, 'null']
+          format: date-time
+          description: Archived habits stay in sync and can be restored by setting this back to null
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        deviceId:
+          $ref: '#/components/schemas/DeviceId'
+    CheckIn:
+      type: object
+      required: [habitId, date, count, updatedAt, deviceId]
+      additionalProperties: false
+      description: One record per habit and day. Unchecking writes count 0, records are never deleted.
+      properties:
+        habitId:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        count:
+          type: integer
+          minimum: 0
+          maximum: 99
+        updatedAt:
+          type: string
+          format: date-time
+        deviceId:
+          $ref: '#/components/schemas/DeviceId'
+    SyncRequest:
+      type: object
+      required: [deviceId, cursor, habits, checkins]
+      additionalProperties: false
+      properties:
+        deviceId:
+          $ref: '#/components/schemas/DeviceId'
+        cursor:
+          type: [string, 'null']
+          maxLength: 200
+          description: Opaque value from the previous response, null on the first sync
+        habits:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: '#/components/schemas/Habit'
+        checkins:
+          type: array
+          maxItems: 5000
+          items:
+            $ref: '#/components/schemas/CheckIn'
+    SyncResponse:
+      type: object
+      required: [cursor, hasMore, habits, checkins]
+      additionalProperties: false
+      properties:
+        cursor:
+          type: string
+          maxLength: 200
+        hasMore:
+          type: boolean
+        habits:
+          type: array
+          items:
+            $ref: '#/components/schemas/Habit'
+        checkins:
+          type: array
+          items:
+            $ref: '#/components/schemas/CheckIn'
