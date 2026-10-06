@@ -1,0 +1,46 @@
+# One contest run: the agent plus what its team needs. Started by run.ts, one project per run.
+services:
+  db:
+    profiles: [backend]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: stackarena
+      POSTGRES_PASSWORD: stackarena
+      POSTGRES_DB: stackarena
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "stackarena"]
+      interval: 2s
+      retries: 30
+
+  # Reference backend for client teams. Only its port is visible, never its source.
+  api:
+    profiles: [client]
+    image: oven/bun:1-slim
+    working_dir: /harness
+    command: ["bun", "reference/api.ts"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "18080"
+    volumes:
+      - ${REPO}/harness:/harness:ro
+      - ${REPO}/spec:/spec:ro
+
+  agent:
+    image: stackarena-run:1
+    cap_add: [NET_ADMIN]
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: 1
+    cpus: 6
+    mem_limit: 12g
+    working_dir: /work
+    volumes:
+      - ${RUN_DIR}:/work
+    environment:
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      DISABLE_AUTOUPDATER: "1"
+      DATABASE_URL: postgres://stackarena:stackarena@db:5432/stackarena
+      STACKARENA_API_URL: http://api:18080
+      GIT_AUTHOR_NAME: ${GIT_NAME}
+      GIT_AUTHOR_EMAIL: ${GIT_EMAIL}
+      GIT_COMMITTER_NAME: ${GIT_NAME}
+      GIT_COMMITTER_EMAIL: ${GIT_EMAIL}

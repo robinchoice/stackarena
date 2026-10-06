@@ -1,0 +1,15 @@
+{
+  "client/dart": { "name": "Dart", "stack": "Flutter (Dart)" },
+  "client/svelte-tauri": { "name": "Svelte-Tauri", "stack": "SvelteKit and Tauri 2 for desktop and mobile (TypeScript)" },
+  "client/svelte-electron": { "name": "Svelte-Electron", "stack": "SvelteKit, Electron for desktop and Capacitor for mobile (TypeScript)" },
+  "client/react": { "name": "React", "stack": "Expo / React Native with React Native Web, desktop through Tauri around the web build (TypeScript)" },
+  "client/rust": { "name": "Rust", "stack": "Dioxus 0.7 for web, desktop and mobile (Rust)" },
+  "client/go": { "name": "Go", "stack": "Fyne 2.8, web through WebAssembly (Go)" },
+  "client/python": { "name": "Python", "stack": "Flet 1.0 (Python)" },
+  "backend/bun": { "name": "Bun", "stack": "Bun, Hono and Drizzle ORM (TypeScript)" },
+  "backend/deno": { "name": "Deno", "stack": "Deno, Hono and Drizzle ORM (TypeScript)" },
+  "backend/go": { "name": "Go", "stack": "Go net/http with sqlc" },
+  "backend/rust": { "name": "Rust", "stack": "Axum with sqlx (Rust)" },
+  "backend/dart": { "name": "Dart", "stack": "Dart Frog (Dart)" },
+  "backend/python": { "name": "Python", "stack": "FastAPI with async SQLAlchemy (Python)" }
+}
