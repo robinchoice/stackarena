@@ -1,0 +1,5 @@
+# A schema-valid push can still be rejected: a check-in may reference an unknown habit
+[[operations]]
+include-path = "/sync"
+[operations.checks.positive_data_acceptance]
+expected-statuses = [200, 422]

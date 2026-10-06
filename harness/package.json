@@ -1,0 +1,22 @@
+{
+  "name": "stackarena-harness",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seed": "bun seed/generate.ts",
+    "typecheck": "tsc --noEmit",
+    "test:api": "bun test api/",
+    "test:contract": "api/contract.sh",
+    "test:load": "load/run.sh",
+    "test:e2e": "playwright test -c e2e/playwright.config.ts",
+    "verify": "bun run typecheck && api/with-reference.sh bun test api/ && bun run test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/bun": "^1.4.2",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "typescript": "^7.0.2",
+    "yaml": "^2.9.1"
+  }
+}
