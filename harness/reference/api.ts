@@ -52,10 +52,14 @@ const tokens = new Map<string, string>();
 const stores = new Map<string, Store>();
 const failures = new Map<string, number[]>();
 
+const CORS = {
+  'access-control-allow-origin': '*',
+  'access-control-expose-headers': 'retry-after',
+};
 const json = (status: number, body?: unknown, headers: Record<string, string> = {}) =>
   new Response(body === undefined ? null : JSON.stringify(body), {
     status,
-    headers: body === undefined ? headers : { 'content-type': 'application/json', ...headers },
+    headers: { ...CORS, ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...headers },
   });
 
 // Later updatedAt wins, on a tie the larger deviceId
@@ -94,6 +98,13 @@ async function handle(req: Request): Promise<Response> {
     tokens.set(token, u.id);
     return { token, user: { id: u.id, email: u.email, createdAt: u.createdAt } };
   };
+
+  if (req.method === 'OPTIONS')
+    return json(204, undefined, {
+      'access-control-allow-methods': 'GET, POST',
+      'access-control-allow-headers': 'authorization, content-type, accept-language',
+      'access-control-max-age': '600',
+    });
 
   switch (route) {
     case 'GET /health':
@@ -199,5 +210,5 @@ async function handle(req: Request): Promise<Response> {
   return allow[pathname] ? error(405, m.method, { allow: allow[pathname] }) : error(404, m.notFound);
 }
 
-const server = Bun.serve({ port: Number(process.env.PORT ?? 18080), hostname: '127.0.0.1', fetch: handle });
+const server = Bun.serve({ port: Number(process.env.PORT ?? 18080), hostname: process.env.HOST ?? '127.0.0.1', fetch: handle });
 console.log(`reference api on ${server.url}`);

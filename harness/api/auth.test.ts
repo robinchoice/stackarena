@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { PASSWORD, call, register, uniqueEmail } from './client';
+import { BASE_URL, PASSWORD, call, register, uniqueEmail } from './client';
 
 describe('health', () => {
   test('answers ok without a token', async () => {
@@ -90,6 +90,25 @@ describe('http', () => {
     expect(res.status).toBe(405);
     expect(res.headers.get('allow')).toBe('GET');
     expect((await call('GET', '/sync')).status).toBe(405);
+  });
+});
+
+describe('cors', () => {
+  test('every response allows any origin, preflight answers 204', async () => {
+    const res = await fetch(`${BASE_URL}/health`, { headers: { origin: 'http://localhost:5173' } });
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    const pre = await fetch(`${BASE_URL}/sync`, {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'http://localhost:5173',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'authorization, content-type',
+      },
+    });
+    expect(pre.status).toBe(204);
+    expect(pre.headers.get('access-control-allow-origin')).toBe('*');
+    expect(pre.headers.get('access-control-allow-methods')).toContain('POST');
+    expect(pre.headers.get('access-control-allow-headers')?.toLowerCase()).toContain('authorization');
   });
 });
 

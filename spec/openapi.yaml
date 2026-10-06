@@ -19,6 +19,10 @@ info:
     **Errors** always have the body `{ "error": "<message>" }`. The message follows
     `Accept-Language` (`de` or `en`, default `en`).
 
+    **CORS.** Every response carries `Access-Control-Allow-Origin: *` and exposes `Retry-After`.
+    Preflight requests (`OPTIONS`) answer 204 with `Access-Control-Allow-Methods: GET, POST` and
+    `Access-Control-Allow-Headers: authorization, content-type, accept-language`.
+
     **HTTP.** Unknown paths answer 404. Known paths answer 405 with an `Allow` header for methods not listed here.
 
     **Security.** Passwords are stored with Argon2id or bcrypt. Tokens are opaque, valid for
