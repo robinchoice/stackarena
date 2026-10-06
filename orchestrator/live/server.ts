@@ -1,12 +1,15 @@
 // Read-only live view of contest runs: bun orchestrator/live/server.ts, then open http://127.0.0.1:4520
 // It tails each run's transcript and looks into the run repository; it never writes to either.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { usage } from '../usage';
+import { PRICE, usage } from '../usage';
 
 const REPO = new URL('../..', import.meta.url).pathname.replace(/\/$/, '');
 const RESULTS = `${REPO}/results/runs`;
 const RUNS = `${REPO}/runs`;
 const ID = /^[a-z0-9-]+$/;
+const TEAMS: Record<string, { name: string; stack: string }> = JSON.parse(
+  readFileSync(`${REPO}/orchestrator/teams.json`, 'utf8'),
+);
 
 type Item = Record<string, unknown> & { k: string };
 
@@ -16,6 +19,28 @@ function run(cmd: string[], cwd?: string): string {
 }
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
+
+// Recomputes only when a file has grown or changed, so polling many runs stays cheap
+const cache = new Map<string, { stamp: string; value: unknown }>();
+function cached<T>(key: string, files: string[], compute: () => T): T {
+  const stamp = files.map((f) => (existsSync(f) ? `${statSync(f).size}:${statSync(f).mtimeMs}` : '-')).join('|');
+  const hit = cache.get(key);
+  if (hit && hit.stamp === stamp) return hit.value as T;
+  const value = compute();
+  cache.set(key, { stamp, value });
+  return value;
+}
+
+function meta(id: string) {
+  const plain = id.replace(/^smoke-/, '');
+  const kind = plain.split('-')[0] as 'client' | 'backend';
+  const slug = plain.split('-').slice(1, -1).join('-');
+  const team = TEAMS[`${kind}/${slug}`];
+  return { kind, slug, folder: `${kind}s/${slug}`, name: team?.name ?? slug, stack: team?.stack ?? '', smoke: id !== plain, run: plain.split('-').at(-1) };
+}
+
+const resultText = (b: any) =>
+  Array.isArray(b.content) ? b.content.map((c: any) => c.text ?? '').join('\n') : String(b.content ?? '');
 
 // Turns one transcript line into the few things worth showing
 function items(line: string): Item[] {
@@ -48,9 +73,7 @@ function items(line: string): Item[] {
     }
   } else if (e.type === 'user') {
     for (const b of e.message?.content ?? []) {
-      if (b.type !== 'tool_result') continue;
-      const text = Array.isArray(b.content) ? b.content.map((c: any) => c.text ?? '').join('\n') : String(b.content ?? '');
-      out.push({ k: 'result', id: b.tool_use_id, error: !!b.is_error, text: clip(text, 6000) });
+      if (b.type === 'tool_result') out.push({ k: 'result', id: b.tool_use_id, error: !!b.is_error, text: clip(resultText(b), 6000) });
     }
   } else if (e.type === 'rate_limit_event') {
     const w = e.rate_limit_info?.unifiedWindows ?? {};
@@ -63,6 +86,75 @@ function items(line: string): Item[] {
   return out;
 }
 
+const sessionFiles = (dir: string) =>
+  existsSync(`${dir}/session`) ? readdirSync(`${dir}/session`).filter((f) => f.endsWith('.jsonl')).map((f) => `${dir}/session/${f}`) : [];
+
+// Test results the agent produced itself: bun test (API) and Playwright (web) summaries
+type Tests = { suite: string; pass: number; fail: number; cases: { name: string; ok: boolean }[]; at: string | null; count: number };
+function testRuns(dir: string): Tests[] {
+  const files = sessionFiles(dir);
+  const sources = files.length ? files : [`${dir}/transcript.jsonl`];
+  return cached(`tests:${dir}`, sources, () => {
+    const runs: Tests[] = [];
+    for (const file of sources)
+      for (const line of readFileSync(file, 'utf8').split('\n')) {
+        if (!line.includes('tool_result')) continue;
+        let e: any;
+        try {
+          e = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (e.type !== 'user') continue;
+        for (const b of e.message?.content ?? []) {
+          if (b?.type !== 'tool_result') continue;
+          const t = resultText(b);
+          const bun = /^\s*(\d+) pass\s*$[\s\S]*?^\s*(\d+) fail\s*$/m.exec(t);
+          const pw = /(\d+) passed/.exec(t);
+          if (!bun && !pw) continue;
+          const cases = [...t.matchAll(/^\((pass|fail)\) (.+?)(?: \[[\d.]+m?s\])?$/gm)].map((m) => ({ name: m[2]!, ok: m[1] === 'pass' }));
+          for (const m of t.matchAll(/^\s*([✓✘×])\s+\d+\s+(.+?)(?: \(\d.*\))?$/gm)) cases.push({ name: m[2]!, ok: m[1] === '✓' });
+          const pass = bun ? +bun[1]! : +pw![1]!;
+          const fail = bun ? +bun[2]! : +(/(\d+) failed/.exec(t)?.[1] ?? 0);
+          runs.push({ suite: bun ? 'API' : 'Web', pass, fail, cases, at: e.timestamp ?? null, count: runs.length + 1 });
+        }
+      }
+    return runs;
+  });
+}
+
+// Cumulative list price over time, from the session log's timestamps
+function series(dir: string, started: number): { m: number; usd: number }[] {
+  const files = sessionFiles(dir);
+  return cached(`series:${dir}`, files, () => {
+    const msgs = new Map<string, { t: number; u: any }>();
+    for (const file of files)
+      for (const line of readFileSync(file, 'utf8').split('\n')) {
+        if (!line.includes('"usage"')) continue;
+        try {
+          const e = JSON.parse(line);
+          if (e.type === 'assistant' && e.message?.usage && e.timestamp)
+            msgs.set(e.message.id, { t: msgs.get(e.message.id)?.t ?? Date.parse(e.timestamp), u: e.message.usage });
+        } catch {}
+      }
+    const sorted = [...msgs.values()].sort((a, b) => a.t - b.t);
+    const out: { m: number; usd: number }[] = [];
+    let usd = 0;
+    for (const { t, u } of sorted) {
+      usd +=
+        ((u.input_tokens ?? 0) * PRICE.input +
+          (u.output_tokens ?? 0) * PRICE.output +
+          (u.cache_read_input_tokens ?? 0) * PRICE.cacheRead +
+          (u.cache_creation?.ephemeral_5m_input_tokens ?? 0) * PRICE.cacheWrite5m +
+          (u.cache_creation?.ephemeral_1h_input_tokens ?? 0) * PRICE.cacheWrite1h) /
+        1e6;
+      out.push({ m: Math.round((t - started) / 6000) / 10, usd: Math.round(usd * 100) / 100 });
+    }
+    const step = Math.max(1, Math.ceil(out.length / 80));
+    return out.filter((_, i) => i % step === 0 || i === out.length - 1);
+  });
+}
+
 // Latest subscription utilisation the transcript reported
 function quota(transcript: string): Item | null {
   const at = transcript.lastIndexOf('{"type":"rate_limit_event"');
@@ -72,8 +164,7 @@ function quota(transcript: string): Item | null {
 }
 
 function container(id: string) {
-  const name = `stackarena-${id}-agent`;
-  const ip = run(['docker', 'inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', name]);
+  const ip = run(['docker', 'inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', `stackarena-${id}-agent`]);
   return { running: ip !== '', ip };
 }
 
@@ -92,7 +183,7 @@ function listRuns() {
     .filter((id) => ID.test(id) && existsSync(`${RESULTS}/${id}/transcript.jsonl`))
     .map((id) => {
       const done = existsSync(`${RESULTS}/${id}/summary.json`);
-      return { id, done, live: !done && container(id).running, started: statSync(`${RESULTS}/${id}/prompt.md`).mtime };
+      return { id, ...meta(id), done, live: !done && container(id).running, started: statSync(`${RESULTS}/${id}/prompt.md`).mtime };
     })
     .sort((a, b) => +b.started - +a.started);
 }
@@ -100,13 +191,13 @@ function listRuns() {
 async function state(id: string) {
   const dir = `${RESULTS}/${id}`;
   const repo = `${RUNS}/${id}`;
-  const kind = id.replace(/^smoke-/, '').split('-')[0];
-  const folder = `${kind}s/${id.replace(/^smoke-/, '').split('-').slice(1, -1).join('-')}`;
+  const m = meta(id);
   const summary = existsSync(`${dir}/summary.json`) ? JSON.parse(readFileSync(`${dir}/summary.json`, 'utf8')) : null;
   const started = summary?.started ?? statSync(`${dir}/prompt.md`).mtime.toISOString();
-  const limitHours = summary?.limitHours ?? (id.startsWith('smoke-') ? 0.1 : 4);
-  const u = usage(dir);
-  const q = quota(readFileSync(`${dir}/transcript.jsonl`, 'utf8'));
+  const limitHours = summary?.limitHours ?? (m.smoke ? 0.1 : 4);
+  const transcript = `${dir}/transcript.jsonl`;
+  const u = cached(`usage:${dir}`, [transcript, ...sessionFiles(dir)], () => usage(dir));
+  const q = cached(`quota:${dir}`, [transcript], () => quota(readFileSync(transcript, 'utf8')));
 
   const first = run(['git', 'rev-list', '--max-parents=0', 'HEAD'], repo);
   const commits = run(['git', 'log', '--format=%h%x09%cI%x09%s', `${first}..HEAD`], repo)
@@ -117,13 +208,13 @@ async function state(id: string) {
       return { hash, at, subject };
     });
   const changed = new Map<string, string>();
-  for (const l of run(['git', 'diff', '--name-status', first, 'HEAD', '--', folder], repo).split('\n').filter(Boolean)) {
+  for (const l of run(['git', 'diff', '--name-status', first, 'HEAD', '--', m.folder], repo).split('\n').filter(Boolean)) {
     const [s, f] = l.split('\t');
     changed.set(f!, s === 'A' ? 'neu' : 'geändert');
   }
-  for (const l of run(['git', 'status', '--porcelain', '--', folder], repo).split('\n').filter(Boolean))
+  for (const l of run(['git', 'status', '--porcelain', '--', m.folder], repo).split('\n').filter(Boolean))
     changed.set(l.slice(3), 'offen');
-  const files = run(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '--', folder], repo)
+  const files = run(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '--', m.folder], repo)
     .split('\n')
     .filter((f) => f && !f.includes('node_modules/'))
     .slice(0, 600)
@@ -133,19 +224,25 @@ async function state(id: string) {
         const st = statSync(`${repo}/${f}`);
         if (st.size < 400_000) lines = readFileSync(`${repo}/${f}`, 'utf8').split('\n').length;
       } catch {}
-      return { path: f.slice(folder.length + 1), lines, status: changed.get(f) ?? '' };
+      return { path: f.slice(m.folder.length + 1), lines, status: changed.get(f) ?? '' };
     });
+  const code = files
+    .filter((f) => !/(^|\/)([^/]*\.lock|package-lock\.json|[^/]*_snapshot\.json)$/.test(f.path))
+    .reduce((s, f) => s + f.lines, 0);
 
   const c = container(id);
   let preview: string | null = null;
   let server: boolean | null = null;
-  if (c.running && kind === 'client' && (await reachable(`http://${c.ip}:5173/`))) preview = `http://${c.ip}:5173/`;
-  if (c.running && kind === 'backend') server = await reachable(`http://${c.ip}:8080/health`);
+  if (c.running && m.kind === 'client' && (await reachable(`http://${c.ip}:5173/`))) preview = `http://${c.ip}:5173/`;
+  if (c.running && m.kind === 'backend') server = await reachable(`http://${c.ip}:8080/health`);
+  const tests = testRuns(dir);
 
   return {
-    id, kind, folder, started, limitHours, live: !summary && c.running, summary,
+    id, ...m, started, limitHours, live: !summary && c.running, summary,
     requests: u.requests, tokens: u.tokens, usd: u.usd, usageSource: u.source, quota: q,
-    commits, files, preview, server,
+    series: series(dir, Date.parse(started)),
+    commits, files, code, preview, server,
+    tests: tests.at(-1) ?? null, testRuns: tests.length,
   };
 }
 
@@ -199,6 +296,8 @@ const server = Bun.serve({
     const url = new URL(req.url);
     const id = url.searchParams.get('run') ?? '';
     if (url.pathname === '/') return new Response(Bun.file(page));
+    if (/^\/fonts\/bricolage-grotesque-latin(-ext)?\.woff2$/.test(url.pathname))
+      return new Response(Bun.file(`${REPO}/spec/mockup/${url.pathname.slice(7)}`));
     if (url.pathname === '/api/runs') return Response.json(listRuns());
     if (!ID.test(id) || !existsSync(`${RESULTS}/${id}/transcript.jsonl`)) return new Response('unknown run', { status: 404 });
     if (url.pathname === '/api/state') return Response.json(await state(id));

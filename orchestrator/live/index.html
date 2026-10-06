@@ -3,172 +3,257 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Stackarena live</title>
+<title>Stackarena Konferenz</title>
 <link rel="icon" href="data:,">
 <style>
+@font-face{font-family:'Bricolage Grotesque';font-weight:200 800;font-stretch:75% 100%;font-display:swap;src:url(/fonts/bricolage-grotesque-latin.woff2) format('woff2')}
 :root{
-  --bg:#0E0D12;--panel:#15141A;--panel2:#1C1B22;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.16);
+  --bg:#0B0A0F;--panel:#14131A;--panel2:#1B1A22;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.16);
   --ink:#F2F0EA;--muted:#9A98A3;--dim:#6E6C77;--ok:#6CCF8E;--bad:#F2545B;--warn:#F2C14E;--blue:#46BFE0;--violet:#8E92F8;
   --grad:linear-gradient(45deg,#F2C14E,#CAC561,#A2C974);
-  --sys:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;--mono:ui-monospace,'JetBrains Mono','SFMono-Regular',Menlo,monospace;
+  --sys:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;--mono:ui-monospace,'JetBrains Mono',Menlo,monospace;
+  --disp:'Bricolage Grotesque',var(--sys);
 }
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.45 var(--sys);-webkit-font-smoothing:antialiased}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.45 var(--sys);-webkit-font-smoothing:antialiased;overflow:hidden}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
-.top{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);height:52px}
-.top h1{font-size:16px;margin:0;font-weight:700;letter-spacing:-.01em}
-.top h1 i{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--grad);margin-right:8px}
-.chips{display:flex;gap:6px;overflow-x:auto;flex:1}
-.chip{padding:5px 11px;border-radius:999px;border:1px solid var(--line2);color:var(--muted);font-size:12.5px;white-space:nowrap;display:flex;align-items:center;gap:6px}
-.chip.on{color:var(--ink);border-color:var(--ink);background:var(--panel2)}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--dim);flex:none}
-.dot.live{background:var(--ok);box-shadow:0 0 0 0 rgba(108,207,142,.6);animation:pulse 1.6s infinite}
-@keyframes pulse{70%{box-shadow:0 0 0 7px rgba(108,207,142,0)}100%{box-shadow:0 0 0 0 rgba(108,207,142,0)}}
-.hint{color:var(--dim);font-size:12px}
-.cols{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);height:calc(100% - 52px)}
-.col{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line)}
-.col:last-child{border-right:0}
-.head{padding:12px 16px 10px;border-bottom:1px solid var(--line);display:grid;gap:8px}
-.title{display:flex;align-items:baseline;gap:10px}
-.title b{font-size:20px;letter-spacing:-.01em}
-.title span{color:var(--muted);font-size:12.5px}
-.clock{margin-left:auto;font:600 15px var(--mono);color:var(--ink)}
-.clock small{color:var(--muted);font-weight:400}
-.bar{height:4px;border-radius:2px;background:var(--panel2);overflow:hidden}
-.bar i{display:block;height:100%;background:var(--grad);transition:width 1s linear}
-.stats{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--muted)}
-.stats b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
-.stats .warn b{color:var(--warn)}
-.split{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}
-.multi .split{grid-template-columns:1fr;grid-template-rows:minmax(0,1.3fr) minmax(0,1fr)}
-.feed{overflow-y:auto;padding:12px 14px 40px;border-right:1px solid var(--line)}
-.multi .feed{border-right:0;border-bottom:1px solid var(--line)}
-.side{overflow-y:auto;padding:12px 14px 30px;display:grid;gap:12px;align-content:start}
+a{color:inherit;text-decoration:none}
+.disp{font-family:var(--disp);font-stretch:78%;font-weight:780;letter-spacing:-.01em;line-height:.95}
+
+/* top bar */
+.top{display:flex;align-items:center;gap:18px;padding:0 16px;height:54px;border-bottom:1px solid var(--line);background:#0E0D13}
+.brand{display:flex;align-items:center;gap:9px;font-size:22px}
+.brand i{width:10px;height:10px;border-radius:50%;background:var(--grad)}
+.tabs{display:flex;gap:2px;height:100%}
+.tabs a{display:flex;align-items:center;padding:0 14px;color:var(--muted);font-weight:600;position:relative}
+.tabs a.on{color:var(--ink)}
+.tabs a.on::after{content:'';position:absolute;left:10px;right:10px;bottom:-1px;height:2px;background:var(--grad);border-radius:2px}
+.teams{display:flex;gap:6px;overflow-x:auto;flex:1;scrollbar-width:none}
+.tchip{display:flex;align-items:center;gap:6px;padding:5px 11px;border:1px solid var(--line2);border-radius:999px;color:var(--muted);font-size:12.5px;white-space:nowrap}
+.tchip.on{color:var(--ink);border-color:var(--ink)}
+.opt{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:12px;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex:none}
+.dot.live{background:var(--bad);animation:pulse 1.4s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(242,84,91,.6)}70%{box-shadow:0 0 0 8px rgba(242,84,91,0)}100%{box-shadow:0 0 0 0 rgba(242,84,91,0)}}
+.live-badge{font:700 10.5px var(--sys);letter-spacing:.06em;color:#fff;background:var(--bad);border-radius:4px;padding:2px 6px}
+.done-badge{font:600 10.5px var(--sys);color:var(--muted);border:1px solid var(--line2);border-radius:4px;padding:1px 6px}
+.kind{font:600 11px var(--sys);color:var(--muted);border:1px solid var(--line2);border-radius:4px;padding:1px 6px}
+
+/* screens */
+.screen{position:absolute;top:54px;left:0;right:0;bottom:38px;overflow:hidden}
+.empty-screen{display:grid;place-items:center;height:100%;color:var(--muted)}
+.grid{display:grid;gap:10px;padding:10px;height:100%}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+.thead{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.thead .name{font-size:24px}
+.thead .stack{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.thead .clock{margin-left:auto;font:600 15px var(--mono);white-space:nowrap}
+.thead .clock small{color:var(--muted);font-weight:400}
+.tbody{flex:1;min-height:0;position:relative}
+.tfoot{padding:8px 14px;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tfoot b{color:var(--ink);font-weight:600}
+
+/* app tile */
+.appview{position:absolute;inset:0;overflow:hidden;background:#fff}
+.appview iframe{border:0;width:1280px;height:800px;transform-origin:top left;position:absolute;left:0;top:0}
+.noapp{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--muted);padding:20px;background:var(--panel)}
+.board{position:absolute;inset:0;padding:18px 20px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+.score{display:flex;align-items:baseline;gap:12px}
+.score .n{font-size:84px}
+.score .of{font-size:40px;color:var(--muted)}
+.score .lbl{color:var(--muted);font-size:14px}
+.squares{display:flex;flex-wrap:wrap;gap:4px}
+.squares i{width:14px;height:14px;border-radius:3px;background:var(--panel2)}
+.squares i.ok{background:var(--ok)}.squares i.bad{background:var(--bad)}
+.srv{display:flex;align-items:center;gap:8px;font-weight:600}
+.srv.up{color:var(--ok)}.srv.down{color:var(--bad)}
+.now{color:var(--ink);font-size:13px;border-left:2px solid var(--warn);padding-left:10px}
+.now small{display:block;color:var(--muted)}
+.steps{display:grid;gap:5px;color:var(--muted);font-size:13px}
+.steps div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.steps time{font:11px var(--mono);color:var(--dim);margin-right:8px}
+
+/* feed */
+.feed{position:absolute;inset:0;overflow-y:auto;padding:12px 14px 30px}
 .ev{margin:0 0 8px}
 .ev time{font:11px var(--mono);color:var(--dim);margin-right:6px}
-.say{background:var(--panel2);border:1px solid var(--line);border-radius:12px 12px 12px 4px;padding:9px 12px;white-space:pre-wrap;word-break:break-word}
+.say{background:var(--panel2);border:1px solid var(--line);border-radius:12px 12px 12px 4px;padding:8px 11px;white-space:pre-wrap;word-break:break-word}
 .say code{font:12.5px var(--mono);background:rgba(255,255,255,.06);padding:1px 4px;border-radius:4px}
 .tool{border-left:2px solid var(--line2);padding:2px 0 2px 10px}
-.tool .row{display:flex;gap:8px;align-items:baseline;cursor:pointer}
+.tool .row{display:flex;gap:8px;align-items:baseline;cursor:pointer;min-width:0}
+.tool .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .tag{font:600 10.5px var(--mono);color:var(--bg);background:var(--muted);border-radius:4px;padding:1px 5px;flex:none;text-transform:lowercase}
 .tag.Bash{background:var(--blue)}.tag.Write,.tag.Edit,.tag.MultiEdit{background:var(--warn)}.tag.Read,.tag.Grep,.tag.Glob{background:var(--violet)}.tag.Task,.tag.Agent{background:#C39BF2}
-.tool .t{color:var(--ink)}
 .state{margin-left:auto;font-size:11.5px;color:var(--dim);flex:none}
 .state.ok{color:var(--ok)}.state.err{color:var(--bad)}.state.run{color:var(--warn)}
-pre{margin:6px 0 0;font:12px/1.45 var(--mono);color:#cfcdd6;background:#0A090D;border:1px solid var(--line);border-radius:8px;padding:8px 10px;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto}
-pre.cmd{color:#e6f6ff}
+pre{margin:6px 0 0;font:12px/1.45 var(--mono);color:#cfcdd6;background:#08070B;border:1px solid var(--line);border-radius:8px;padding:8px 10px;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto}
 pre.err{border-color:rgba(242,84,91,.5)}
 .clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .sys{color:var(--warn);font-size:12.5px}
 .end{border:1px solid var(--ok);border-radius:12px;padding:10px 12px;background:rgba(108,207,142,.08);white-space:pre-wrap}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;min-width:0}
-.card h2{font-size:12.5px;color:var(--muted);margin:0 0 8px;font-weight:600}
-.todo{display:flex;gap:8px;font-size:13px;margin:3px 0}
-.todo i{width:14px;height:14px;border-radius:4px;border:1.5px solid var(--line2);flex:none;margin-top:2px}
-.todo.completed{color:var(--muted);text-decoration:line-through}.todo.completed i{background:var(--ok);border-color:var(--ok)}
-.todo.in_progress i{border-color:var(--warn);background:rgba(242,193,78,.3)}
-.preview{width:100%;height:520px;border:1px solid var(--line2);border-radius:10px;background:#fff}
-.big{font:700 28px var(--sys);letter-spacing:-.02em}
-.ok{color:var(--ok)}.bad{color:var(--bad)}
-.tree{font:12.5px/1.55 var(--mono);color:#d4d2db}
-.tree .d{color:var(--muted)}
-.tree .n{color:var(--dim);float:right}
+.compact .say{font-size:13px;padding:6px 9px}
+.compact pre.cmd{display:none}
+.compact .ev{margin-bottom:6px}
+
+/* table */
+.tables{padding:16px 20px;overflow:auto;height:100%;display:grid;gap:22px;align-content:start}
+.league h2{font-size:30px;margin:0 0 10px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-size:12px;color:var(--muted);font-weight:600;text-align:right;padding:6px 10px;border-bottom:1px solid var(--line2);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:nth-child(-n+3),td:nth-child(-n+3){text-align:left}
+td.rank{font-size:26px;width:44px}
+td.team a{font-size:22px}
+td.team small{display:block;color:var(--muted);font-family:var(--sys);font-size:12px;font-weight:400;letter-spacing:0}
+td.big{font-size:22px}
+tr.lead td.rank{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.spark{display:block}
+.ticker-list{display:grid;gap:6px}
+.tick{display:flex;gap:10px;font-size:13.5px}
+.tick time{font:12px var(--mono);color:var(--dim);flex:none;width:44px}
+.tick b{font-weight:700}
+
+/* team page */
+.teampage{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);grid-template-rows:minmax(0,1.15fr) minmax(0,1fr);gap:10px;padding:10px;height:100%}
+.teampage .ui{grid-row:1}
+.teampage .stats{grid-row:2;grid-column:1}
+.teampage .live{grid-row:1/span 2;grid-column:2}
+.statgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px 18px;padding:14px 16px}
+.stat .v{font-size:40px}
+.stat .l{color:var(--muted);font-size:12.5px;margin-top:4px}
+.statbody{position:absolute;inset:0;overflow:auto}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px 16px}
+.mini h3{font-size:12.5px;color:var(--muted);margin:6px 0;font-weight:600}
+.tree{font:12px/1.55 var(--mono);color:#d4d2db}
+.tree .d{color:var(--muted)}.tree .n{color:var(--dim);float:right}
 .tree .neu{color:var(--ok)}.tree .geändert{color:var(--warn)}.tree .offen{color:var(--blue)}
-.commit{display:flex;gap:8px;font-size:13px;margin:3px 0}
+.commit{display:flex;gap:8px;font-size:12.5px;margin:3px 0}
 .commit code{font:12px var(--mono);color:var(--warn)}
 .commit time{margin-left:auto;color:var(--dim);font:11.5px var(--mono);flex:none}
-.empty{color:var(--dim);font-size:13px}
+
+/* ticker */
+.ticker{position:fixed;left:0;right:0;bottom:0;height:38px;border-top:1px solid var(--line);background:#0E0D13;display:flex;align-items:center;gap:12px;padding:0 16px;font-size:13.5px;overflow:hidden;white-space:nowrap}
+.ticker .lbl{font:700 11px var(--sys);letter-spacing:.06em;color:var(--bg);background:var(--grad);border-radius:4px;padding:3px 7px}
+.ticker .items{display:flex;gap:28px;overflow:hidden}
+.ticker time{font:12px var(--mono);color:var(--dim);margin-right:6px}
+.flash{animation:flash 2.4s ease-out}
+@keyframes flash{0%{background:rgba(108,207,142,.35)}100%{background:transparent}}
 </style>
 </head>
 <body>
-<header class="top"><h1><i></i>Stackarena live</h1><div class="chips" id="chips"></div><span class="hint">Klick wählt Läufe, zwei nebeneinander</span></header>
-<main class="cols" id="cols"></main>
+<header class="top">
+  <a class="brand disp" href="#/apps"><i></i>Stackarena</a>
+  <nav class="tabs"><a href="#/apps" data-r="apps">Apps</a><a href="#/agents" data-r="agents">Agenten</a><a href="#/table" data-r="table">Tabelle</a></nav>
+  <div class="teams" id="teams"></div>
+  <label class="opt"><input type="checkbox" id="smoke"> Rauchtests</label>
+</header>
+<main id="screen" class="screen"></main>
+<footer class="ticker"><span class="lbl">TICKER</span><div class="items" id="ticker"></div></footer>
 <script>
 'use strict';
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const hhmm = (ms) => { const m = Math.max(0, Math.floor(ms / 60000)); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; };
-const fmt = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(1)} Mio.` : n >= 1e3 ? `${Math.round(n / 1e3)} Tsd.` : String(n);
-const pct = (x) => x == null ? '–' : `${Math.round(x * 100)} %`;
-const teamName = (id) => id.replace(/^smoke-/, 'Rauchtest ').replace(/^(client|backend)-/, (m, k) => (k === 'client' ? 'Client ' : 'Backend ')).replace(/-(\d+)$/, ', Lauf $1');
+const fmt = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} Mio.` : n >= 1e3 ? `${Math.round(n / 1e3)} Tsd.` : String(n ?? 0));
+const pct = (x) => (x == null ? '–' : `${Math.round(x * 100)} %`);
+const clockTime = (iso) => new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 
-let selected = new URLSearchParams(location.search).get('runs')?.split(',').filter(Boolean) ?? [];
-const views = new Map();
+/* ---------- data: one entry per run, shared by all screens ---------- */
+const runs = new Map();
+let showSmoke = false;
 
+function entry(r) {
+  let e = runs.get(r.id);
+  if (e) { Object.assign(e.meta, r); return e; }
+  e = { id: r.id, meta: r, state: null, feed: makeFeed(r.id), app: null, last: '', prev: null };
+  runs.set(r.id, e);
+  return e;
+}
+const visible = () => [...runs.values()].filter((e) => showSmoke || !e.meta.smoke).sort((a, b) => (b.meta.live - a.meta.live) || a.meta.kind.localeCompare(b.meta.kind) || a.meta.name.localeCompare(b.meta.name));
+
+let lineup = '';
 async function loadRuns() {
-  const runs = await (await fetch('/api/runs')).json();
-  if (!selected.length) selected = runs.filter((r) => r.live).map((r) => r.id).slice(0, 2);
-  if (!selected.length && runs[0]) selected = [runs[0].id];
-  $('#chips').innerHTML = runs.map((r) => `<button class="chip ${selected.includes(r.id) ? 'on' : ''}" data-id="${r.id}"><span class="dot ${r.live ? 'live' : ''}"></span>${esc(teamName(r.id))}</button>`).join('');
-  syncColumns();
+  const list = await (await fetch('/api/runs')).json();
+  for (const r of list) entry(r);
+  // A run that starts or ends changes the line-up, so the screen is built again
+  const now = visible().map((e) => `${e.id}:${e.meta.live}`).join(',');
+  if (now !== lineup) { lineup = now; current = ''; }
+  renderTeams();
+  route();
 }
-document.addEventListener('click', (e) => {
-  const chip = e.target.closest('.chip');
-  if (chip) {
-    const id = chip.dataset.id;
-    selected = selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id].slice(-2);
-    history.replaceState(null, '', `?runs=${selected.join(',')}`);
-    loadRuns();
-    return;
-  }
-  const row = e.target.closest('.tool .row');
-  if (row) row.parentElement.classList.toggle('open');
-});
-
-function syncColumns() {
-  for (const [id, v] of views) if (!selected.includes(id)) { v.close(); views.delete(id); }
-  for (const id of selected) if (!views.has(id)) views.set(id, openView(id));
-  const cols = $('#cols');
-  cols.classList.toggle('multi', selected.length > 1);
-  for (const id of selected) cols.appendChild(views.get(id).el);
+async function refreshStates() {
+  await Promise.all(visible().map(async (e) => {
+    try {
+      const s = await (await fetch(`/api/state?run=${e.id}`)).json();
+      announce(e, s);
+      e.prev = e.state;
+      e.state = s;
+    } catch {}
+  }));
+  update();
 }
 
-function openView(id) {
-  const el = document.createElement('section');
-  el.className = 'col';
-  el.innerHTML = `<div class="head"><div class="title"><b>${esc(teamName(id))}</b><span class="what"></span><span class="clock"></span></div><div class="bar"><i></i></div><div class="stats"></div></div>
-    <div class="split"><div class="feed"></div><div class="side"><div class="card plan" hidden><h2>Plan des Agenten</h2><div class="todos"></div></div><div class="card live"></div><div class="card"><h2>Dateien im Team-Ordner</h2><div class="tree"></div></div><div class="card"><h2>Commits</h2><div class="commits"></div></div></div></div>`;
-  const feed = $('.feed', el);
+/* ---------- ticker: commits, test runs, server up ---------- */
+const ticks = [];
+const seen = new Set();
+function tick(at, html, key) {
+  if (seen.has(key)) return;
+  seen.add(key);
+  ticks.push({ at: at ? Date.parse(at) : Date.now(), html });
+  ticks.sort((a, b) => b.at - a.at);
+}
+function announce(e, s) {
+  const who = `<b>${esc(s.name)}</b>`;
+  for (const c of s.commits) tick(c.at, `${who} committet: ${esc(c.subject)}`, `c:${e.id}:${c.hash}`);
+  if (s.tests) tick(s.tests.at, `${who}: ${s.tests.pass} von ${s.tests.pass + s.tests.fail} ${s.tests.suite}-Tests grün`, `t:${e.id}:${s.testRuns}`);
+  if (s.server && e.state && e.state.server === false) tick(null, `${who}: Server läuft wieder`, `s:${e.id}:${Date.now()}`);
+  if (e.state && s.tests && e.state.tests && s.tests.pass > e.state.tests.pass) e.flash = true;
+}
+function renderTicker() {
+  $('#ticker').innerHTML = ticks.slice(0, 6).map((t) => `<span><time>${new Date(t.at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</time>${t.html}</span>`).join('');
+}
+
+/* ---------- feed: one DOM feed per run, moved between screens ---------- */
+function makeFeed(id) {
+  const el = document.createElement('div');
+  el.className = 'feed';
   const tools = new Map();
-  let lastTest = null;
-  let state = null;
-
-  const nearBottom = () => feed.scrollHeight - feed.scrollTop - feed.clientHeight < 120;
   const stamp = (at) => (at ? `<time>${new Date(at).toLocaleTimeString('de-DE')}</time>` : '');
+  const near = () => el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+  const feed = { el, plan: [], lastAction: '', quota: null, recent: [] };
+  const note = (text, at) => { feed.lastAction = text; feed.recent.unshift({ text, at }); feed.recent.length = Math.min(feed.recent.length, 12); };
   function add(item, at) {
-    const stick = nearBottom();
-    let node;
+    const stick = near();
+    let node = null;
     if (item.k === 'text') {
       node = document.createElement('div');
       node.className = 'ev';
       node.innerHTML = `${stamp(at)}<div class="say">${esc(item.text).replace(/`([^`]+)`/g, '<code>$1</code>')}</div>`;
+      note(item.text.split('\n')[0], at);
     } else if (item.k === 'tool') {
       node = document.createElement('div');
       node.className = 'ev tool';
       node.innerHTML = `<div class="row">${stamp(at)}<span class="tag ${esc(item.name)}">${esc(item.name)}</span><span class="t">${esc(item.title)}</span><span class="state run">läuft</span></div>${item.detail ? `<pre class="cmd clamp">${esc(item.detail)}</pre>` : ''}`;
       tools.set(item.id, node);
+      note(item.title, at);
     } else if (item.k === 'result') {
       const t = tools.get(item.id);
-      const m = /(\d+) pass[\s\S]*?(\d+) fail/.exec(item.text) || /(\d+) passed/.exec(item.text);
-      if (m) { lastTest = { pass: +m[1], fail: m[2] ? +m[2] : 0, at: at ?? null }; renderLive(); }
-      if (t) {
-        const st = $('.state', t);
-        st.className = `state ${item.error ? 'err' : 'ok'}`;
-        st.textContent = item.error ? 'Fehler' : 'fertig';
-        const pre = document.createElement('pre');
-        pre.className = `out ${item.error ? 'err' : ''}`;
-        pre.textContent = item.text || '(keine Ausgabe)';
-        pre.hidden = !item.error;
-        t.appendChild(pre);
-        $('.row', t).addEventListener('click', () => { pre.hidden = !pre.hidden; $('.cmd', t)?.classList.toggle('clamp'); });
-      }
+      if (!t) return;
+      const st = $('.state', t);
+      st.className = `state ${item.error ? 'err' : 'ok'}`;
+      st.textContent = item.error ? 'Fehler' : 'fertig';
+      const pre = document.createElement('pre');
+      pre.className = item.error ? 'err' : '';
+      pre.textContent = item.text || '(keine Ausgabe)';
+      pre.hidden = true;
+      t.appendChild(pre);
+      $('.row', t).addEventListener('click', () => { pre.hidden = !pre.hidden; $('.cmd', t)?.classList.toggle('clamp'); });
       return;
     } else if (item.k === 'plan') {
-      $('.plan', el).hidden = false;
-      $('.todos', el).innerHTML = item.todos.map((t) => `<div class="todo ${esc(t.status)}"><i></i><span>${esc(t.status === 'in_progress' ? t.activeForm || t.content : t.content)}</span></div>`).join('');
+      feed.plan = item.todos;
       return;
     } else if (item.k === 'quota') {
-      el._quota = item;
+      feed.quota = item;
       return;
     } else if (item.k === 'sys') {
       node = document.createElement('div');
@@ -179,69 +264,189 @@ function openView(id) {
       node.className = 'ev end';
       node.innerHTML = `<b>Lauf beendet</b> (${esc(item.outcome)})\n${esc(item.text)}`;
     }
-    if (node) feed.appendChild(node);
-    if (stick) feed.scrollTop = feed.scrollHeight;
+    if (node) el.appendChild(node);
+    if (stick) el.scrollTop = el.scrollHeight;
   }
-
-  const source = new EventSource(`/api/events?run=${id}`);
-  source.onmessage = (m) => {
+  const src = new EventSource(`/api/events?run=${id}`);
+  src.onmessage = (m) => {
     const { at, items } = JSON.parse(m.data);
     for (const it of items) add(it, at);
-    if (at === null) feed.scrollTop = feed.scrollHeight;
+    if (at === null) el.scrollTop = el.scrollHeight;
   };
-
-  function renderLive() {
-    if (!state) return;
-    const card = $('.card.live', el);
-    let html = '';
-    if (state.kind === 'client') {
-      html = state.preview ? `<h2>App im Container (Web-Build auf Port 5173)</h2><iframe class="preview" src="${state.preview}"></iframe>` : `<h2>App</h2><p class="empty">Noch kein Web-Build auf Port 5173 erreichbar.</p>`;
-    } else {
-      html = `<h2>Server im Container</h2><div class="big ${state.server ? 'ok' : 'bad'}">${state.server ? 'läuft' : state.live ? 'noch nicht erreichbar' : 'gestoppt'}</div>`;
-    }
-    if (lastTest) html += `<h2 style="margin-top:12px">Letzter Testlauf des Agenten</h2><div class="big"><span class="ok">${lastTest.pass} bestanden</span>${lastTest.fail ? ` <span class="bad">${lastTest.fail} fehlgeschlagen</span>` : ''}</div>`;
-    if (card.innerHTML !== html && !(state.preview && card.querySelector('iframe')?.src === state.preview && !lastTest)) card.innerHTML = html;
-  }
-
-  function tree(files) {
-    if (!files.length) return '<p class="empty">Noch keine Dateien.</p>';
-    const root = {};
-    for (const f of files) {
-      let node = root;
-      const parts = f.path.split('/');
-      parts.forEach((p, i) => { node = node[p] ??= i === parts.length - 1 ? { __file: f } : {}; });
-    }
-    const walk = (node, depth) => Object.keys(node).sort((a, b) => (!!node[a].__file - !!node[b].__file) || a.localeCompare(b)).map((k) => {
-      const v = node[k];
-      const pad = '&nbsp;'.repeat(depth * 2);
-      if (v.__file) return `<div class="${esc(v.__file.status)}">${pad}${esc(k)}<span class="n">${v.__file.lines || ''}</span></div>`;
-      return `<div class="d">${pad}${esc(k)}/</div>${walk(v, depth + 1)}`;
-    }).join('');
-    return walk(root, 0);
-  }
-
-  async function refresh() {
-    try { state = await (await fetch(`/api/state?run=${id}`)).json(); } catch { return; }
-    const started = Date.parse(state.started);
-    const limit = state.limitHours * 3600000;
-    const elapsed = state.summary ? state.summary.minutes * 60000 : Date.now() - started;
-    $('.what', el).textContent = state.live ? 'läuft' : state.summary ? `beendet: ${state.summary.outcome}` : 'gestoppt';
-    $('.clock', el).innerHTML = `${hhmm(elapsed)} <small>/ ${hhmm(limit)}</small>`;
-    $('.bar i', el).style.width = `${Math.min(100, (elapsed / limit) * 100)}%`;
-    const q = el._quota ?? state.quota;
-    const t = state.tokens;
-    $('.stats', el).innerHTML = `<span>Anfragen <b>${state.requests}</b></span><span>Listenpreis <b>${state.usd.toFixed(2)} $</b></span><span>Output <b>${fmt(t.output)}</b></span><span>Cache gelesen <b>${fmt(t.cacheRead)}</b></span><span>Commits <b>${state.commits.length}</b></span><span class="${q && q.fiveHour > 0.8 ? 'warn' : ''}">Abo 5 h <b>${pct(q?.fiveHour)}</b></span><span class="${q && q.week > 0.8 ? 'warn' : ''}">Abo Woche <b>${pct(q?.week)}</b></span>`;
-    $('.tree', el).innerHTML = tree(state.files);
-    $('.commits', el).innerHTML = state.commits.length ? state.commits.map((c) => `<div class="commit"><code>${esc(c.hash)}</code><span>${esc(c.subject)}</span><time>${new Date(c.at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</time></div>`).join('') : '<p class="empty">Noch keine Commits.</p>';
-    renderLive();
-  }
-  refresh();
-  const timer = setInterval(refresh, 5000);
-  return { el, close() { source.close(); clearInterval(timer); el.remove(); } };
+  return feed;
 }
 
-loadRuns();
+/* ---------- shared pieces ---------- */
+function elapsed(e) {
+  const s = e.state;
+  if (!s) return { ms: 0, limit: 4 * 3600000 };
+  return { ms: s.summary ? s.summary.minutes * 60000 : Date.now() - Date.parse(s.started), limit: s.limitHours * 3600000 };
+}
+function badge(e) {
+  return e.meta.live ? '<span class="live-badge">LIVE</span>' : e.meta.done ? '<span class="done-badge">beendet</span>' : '<span class="done-badge">gestoppt</span>';
+}
+function head(e) {
+  return `<div class="thead"><span class="name disp">${esc(e.meta.name)}</span><span class="kind">${e.meta.kind === 'client' ? 'Client' : 'Backend'}</span>${badge(e)}<span class="stack">${esc(e.meta.stack)}</span><span class="clock" data-clock="${e.id}"></span></div>`;
+}
+function tickClocks() {
+  for (const el of document.querySelectorAll('[data-clock]')) {
+    const e = runs.get(el.dataset.clock);
+    if (!e) continue;
+    const t = elapsed(e);
+    el.innerHTML = `${hhmm(t.ms)} <small>/ ${hhmm(t.limit)}</small>`;
+  }
+}
+function spark(series, w = 140, h = 34) {
+  if (!series || series.length < 2) return '';
+  const maxX = Math.max(...series.map((p) => p.m), 1), maxY = Math.max(...series.map((p) => p.usd), 0.01);
+  const pts = series.map((p) => `${((p.m / maxX) * (w - 2) + 1).toFixed(1)},${(h - 1 - (p.usd / maxY) * (h - 2)).toFixed(1)}`).join(' ');
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs><linearGradient id="sg" x1="0" y1="${h}" x2="${w}" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#F2C14E"/><stop offset="1" stop-color="#A2C974"/></linearGradient></defs><polyline points="${pts}" fill="none" stroke="url(#sg)" stroke-width="2" stroke-linejoin="round"/></svg>`;
+}
+
+// The live "picture" of a team: its web app for clients, the score board for backends
+function appBody(e) {
+  const s = e.state;
+  if (!s) return '<div class="noapp">lädt …</div>';
+  if (s.kind === 'client') {
+    if (s.preview) return `<div class="appview"><iframe src="${s.preview}" data-preview="${s.preview}"></iframe></div>`;
+    return `<div class="noapp">${s.live ? 'Noch kein Web-Build erreichbar.<br>Sobald der Agent ihn auf Port 5173 startet, erscheint die App hier.' : 'Der Lauf ist beendet. Die App lief im Container.'}</div>`;
+  }
+  const t = s.tests;
+  const total = t ? t.pass + t.fail : 37;
+  const sq = t && t.cases.length ? t.cases.map((c) => `<i class="${c.ok ? 'ok' : 'bad'}" title="${esc(c.name)}"></i>`).join('') : Array.from({ length: total }, (_, i) => `<i class="${t ? (i < t.pass ? 'ok' : 'bad') : ''}"></i>`).join('');
+  return `<div class="board">
+    <div class="score"><span class="n disp ${e.flash ? 'flash' : ''}">${t ? t.pass : 0}</span><span class="of disp">/ ${total}</span><span class="lbl">API-Tests grün<br>${t?.at ? `letzter Lauf ${clockTime(t.at)}` : 'noch kein Testlauf'}</span></div>
+    <div class="squares">${sq}</div>
+    <div class="srv ${s.server ? 'up' : 'down'}"><span class="dot" style="background:currentColor"></span>${s.server ? 'Server antwortet auf /health' : s.live ? 'Server antwortet noch nicht' : 'Lauf beendet'}</div>
+    <div class="now">${esc(e.feed.lastAction || '…')}<small>gerade dabei</small></div>
+    <div class="steps">${e.feed.recent.slice(1).map((r) => `<div>${r.at ? `<time>${new Date(r.at).toLocaleTimeString('de-DE')}</time>` : ''}${esc(r.text)}</div>`).join('')}</div></div>`;
+}
+function fitIframes(root = document) {
+  for (const f of root.querySelectorAll('.appview iframe')) {
+    const box = f.parentElement;
+    const scale = Math.min(box.clientWidth / 1280, box.clientHeight / 800);
+    f.style.transform = `scale(${scale})`;
+  }
+}
+// Re-renders an app slot without reloading a running iframe
+function setApp(slot, e) {
+  const html = appBody(e);
+  const current = slot.querySelector('iframe')?.dataset.preview;
+  if (current && current === e.state?.preview) return;
+  slot.innerHTML = html;
+  fitIframes(slot);
+}
+
+/* ---------- screens ---------- */
+function gridColumns(n) { return n <= 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4; }
+function screenApps(root) {
+  const list = visible();
+  if (!list.length) return (root.innerHTML = '<div class="empty-screen">Noch keine Läufe.</div>');
+  const cols = gridColumns(list.length);
+  root.innerHTML = `<div class="grid" style="grid-template-columns:repeat(${cols},minmax(0,1fr));grid-auto-rows:minmax(0,1fr)">${list.map((e) => `<a class="tile" href="#/team/${e.id}">${head(e)}<div class="tbody" data-app="${e.id}"></div><div class="tfoot" data-foot="${e.id}"></div></a>`).join('')}</div>`;
+  update();
+}
+function screenAgents(root) {
+  const list = visible();
+  if (!list.length) return (root.innerHTML = '<div class="empty-screen">Noch keine Läufe.</div>');
+  root.innerHTML = `<div class="grid compact" style="grid-template-columns:repeat(${Math.min(list.length, 4)},minmax(0,1fr))">${list.map((e) => `<section class="tile">${head(e)}<div class="tbody" data-feed="${e.id}"></div><div class="tfoot" data-foot="${e.id}"></div></section>`).join('')}</div>`;
+  for (const e of list) { const slot = root.querySelector(`[data-feed="${e.id}"]`); slot.appendChild(e.feed.el); e.feed.el.scrollTop = e.feed.el.scrollHeight; }
+  update();
+}
+function rankRows(list) {
+  const score = (e) => { const t = e.state?.tests; return t ? t.pass / Math.max(1, t.pass + t.fail) : -1; };
+  return list.sort((a, b) => score(b) - score(a) || (b.state?.tests?.pass ?? 0) - (a.state?.tests?.pass ?? 0) || elapsed(a).ms - elapsed(b).ms);
+}
+function screenTable(root) {
+  const league = (kind, title) => {
+    const list = rankRows(visible().filter((e) => e.meta.kind === kind));
+    if (!list.length) return '';
+    return `<section class="league"><h2 class="disp">${title}</h2><table><thead><tr><th>Platz</th><th>Team</th><th>Status</th><th>Zeit</th><th>Tests grün</th><th>Commits</th><th>Code-Zeilen</th><th>Anfragen</th><th>Output-Tokens</th><th>Listenpreis</th><th>Kostenverlauf</th></tr></thead><tbody>${list.map((e, i) => {
+      const s = e.state ?? {};
+      const t = s.tests;
+      return `<tr class="${i === 0 ? 'lead' : ''}"><td class="rank disp">${i + 1}</td><td class="team"><a class="disp" href="#/team/${e.id}">${esc(e.meta.name)}</a><small>${esc(e.meta.stack)}</small></td><td>${badge(e)}</td><td data-clock="${e.id}"></td><td class="big disp">${t ? `${t.pass}/${t.pass + t.fail}` : '–'}</td><td>${s.commits?.length ?? 0}</td><td>${fmt(s.code ?? 0)}</td><td>${s.requests ?? 0}</td><td>${fmt(s.tokens?.output ?? 0)}</td><td class="big disp">${(s.usd ?? 0).toFixed(2)} $</td><td>${spark(s.series)}</td></tr>`;
+    }).join('')}</tbody></table></section>`;
+  };
+  root.innerHTML = `<div class="tables">${league('client', 'Client-Liga')}${league('backend', 'Backend-Liga')}<section class="league"><h2 class="disp">Ticker</h2><div class="ticker-list">${ticks.slice(0, 40).map((t) => `<div class="tick"><time>${new Date(t.at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</time><span>${t.html}</span></div>`).join('') || '<p class="tick">Noch nichts passiert.</p>'}</div></section></div>`;
+  tickClocks();
+}
+function screenTeam(root, id) {
+  const e = runs.get(id);
+  if (!e) return (root.innerHTML = '<div class="empty-screen">Unbekannter Lauf.</div>');
+  root.innerHTML = `<div class="teampage">
+    <section class="tile ui">${head(e)}<div class="tbody" data-app="${e.id}"></div></section>
+    <section class="tile stats"><div class="tbody"><div class="statbody" data-stats="${e.id}"></div></div></section>
+    <section class="tile live"><div class="thead"><span class="name disp">Live</span><span class="stack">was der Agent sagt und tut</span></div><div class="tbody" data-feed="${e.id}"></div></section></div>`;
+  root.querySelector(`[data-feed="${e.id}"]`).appendChild(e.feed.el);
+  e.feed.el.scrollTop = e.feed.el.scrollHeight;
+  update();
+}
+function statsBody(e) {
+  const s = e.state;
+  if (!s) return '';
+  const q = e.feed.quota ?? s.quota;
+  const t = s.tests;
+  const plan = e.feed.plan.length ? `<div class="mini"><h3>Plan des Agenten</h3>${e.feed.plan.map((p) => `<div class="commit"><span>${p.status === 'completed' ? '✓' : p.status === 'in_progress' ? '▸' : '·'}</span><span>${esc(p.content)}</span></div>`).join('')}</div>` : '';
+  const tree = (files) => {
+    const root = {};
+    for (const f of files) { let n = root; const parts = f.path.split('/'); parts.forEach((p, i) => { n = n[p] ??= i === parts.length - 1 ? { __f: f } : {}; }); }
+    const walk = (n, d) => Object.keys(n).sort((a, b) => (!!n[a].__f - !!n[b].__f) || a.localeCompare(b)).map((k) => n[k].__f ? `<div class="${esc(n[k].__f.status)}">${'&nbsp;'.repeat(d * 2)}${esc(k)}<span class="n">${n[k].__f.lines || ''}</span></div>` : `<div class="d">${'&nbsp;'.repeat(d * 2)}${esc(k)}/</div>${walk(n[k], d + 1)}`).join('');
+    return files.length ? walk(root, 0) : '<span class="muted">noch keine Dateien</span>';
+  };
+  return `<div class="statgrid">
+      <div class="stat"><div class="v disp">${t ? `${t.pass}/${t.pass + t.fail}` : '–'}</div><div class="l">Tests grün (${t?.suite ?? '–'})</div></div>
+      <div class="stat"><div class="v disp">${s.usd.toFixed(2)} $</div><div class="l">Listenpreis</div></div>
+      <div class="stat"><div class="v disp">${s.commits.length}</div><div class="l">Commits</div></div>
+      <div class="stat"><div class="v disp">${fmt(s.code)}</div><div class="l">Code-Zeilen</div></div>
+      <div class="stat"><div class="v disp">${s.requests}</div><div class="l">Anfragen</div></div>
+      <div class="stat"><div class="v disp">${fmt(s.tokens.output)}</div><div class="l">Output-Tokens</div></div>
+      <div class="stat"><div class="v disp">${pct(q?.fiveHour)}</div><div class="l">Abo, 5-Stunden-Fenster</div></div>
+      <div class="stat"><div class="v disp">${pct(q?.week)}</div><div class="l">Abo, Woche</div></div>
+    </div>
+    <div class="cols2"><div class="mini"><h3>Kostenverlauf</h3>${spark(s.series, 260, 60)}${plan}<h3>Commits</h3>${s.commits.map((c) => `<div class="commit"><code>${esc(c.hash)}</code><span>${esc(c.subject)}</span><time>${clockTime(c.at)}</time></div>`).join('') || '<span class="muted">noch keine</span>'}</div>
+    <div class="mini"><h3>Dateien im Team-Ordner</h3><div class="tree">${tree(s.files)}</div></div></div>`;
+}
+
+/* ---------- updates without rebuilding screens ---------- */
+function update() {
+  for (const slot of document.querySelectorAll('[data-app]')) { const e = runs.get(slot.dataset.app); if (e) setApp(slot, e); }
+  for (const slot of document.querySelectorAll('[data-stats]')) { const e = runs.get(slot.dataset.stats); if (e?.state) slot.innerHTML = statsBody(e); }
+  for (const slot of document.querySelectorAll('[data-foot]')) {
+    const e = runs.get(slot.dataset.foot);
+    const s = e?.state;
+    if (s) slot.innerHTML = `<b>${s.usd.toFixed(2)} $</b> · ${s.requests} Anfragen · ${s.commits.length} Commits · ${fmt(s.code)} Zeilen · <span>${esc(e.feed.lastAction)}</span>`;
+  }
+  for (const e of runs.values()) e.flash = false;
+  if (current === 'table') screenTable($('#screen'));
+  renderTicker();
+  tickClocks();
+}
+function renderTeams() {
+  $('#teams').innerHTML = visible().map((e) => `<a class="tchip ${current === `team/${e.id}` ? 'on' : ''}" href="#/team/${e.id}"><span class="dot ${e.meta.live ? 'live' : ''}"></span>${esc(e.meta.name)} <span style="color:var(--dim)">${e.meta.kind === 'client' ? 'Client' : 'Backend'}${e.meta.smoke ? ', Rauchtest' : ''}</span></a>`).join('');
+}
+
+let current = '';
+function route() {
+  const hash = location.hash.replace(/^#\//, '') || 'apps';
+  const root = $('#screen');
+  if (hash !== current) {
+    current = hash;
+    for (const a of document.querySelectorAll('.tabs a')) a.classList.toggle('on', a.dataset.r === hash);
+    if (hash === 'apps') screenApps(root);
+    else if (hash === 'agents') screenAgents(root);
+    else if (hash === 'table') screenTable(root);
+    else if (hash.startsWith('team/')) screenTeam(root, hash.slice(5));
+    renderTeams();
+  }
+}
+window.addEventListener('hashchange', route);
+window.addEventListener('resize', () => fitIframes());
+$('#smoke').addEventListener('change', (ev) => { showSmoke = ev.target.checked; current = ''; renderTeams(); route(); refreshStates(); });
+
+loadRuns().then(refreshStates);
+setInterval(refreshStates, 5000);
 setInterval(loadRuns, 30000);
+setInterval(tickClocks, 1000);
 </script>
 </body>
 </html>
