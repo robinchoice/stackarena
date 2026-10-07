@@ -110,7 +110,8 @@ function testRuns(dir: string): Tests[] {
           if (b?.type !== 'tool_result') continue;
           const t = resultText(b);
           const bun = /^\s*(\d+) pass\s*$[\s\S]*?^\s*(\d+) fail\s*$/m.exec(t);
-          const pw = /(\d+) passed/.exec(t);
+          // Playwright's summary line, e.g. "  34 passed (12.3s)"; Schemathesis also prints "805 passed"
+          const pw = /^\s*(\d+) passed \(/m.exec(t);
           if (!bun && !pw) continue;
           const cases = [...t.matchAll(/^\((pass|fail)\) (.+?)(?: \[[\d.]+m?s\])?$/gm)].map((m) => ({ name: m[2]!, ok: m[1] === 'pass' }));
           for (const m of t.matchAll(/^\s*([✓✘×])\s+\d+\s+(.+?)(?: \(\d.*\))?$/gm)) cases.push({ name: m[2]!, ok: m[1] === '✓' });
@@ -239,6 +240,8 @@ async function state(id: string) {
 
   return {
     id, ...m, started, limitHours, live: !summary && c.running, summary,
+    // A run that stopped without a summary ends where its transcript does
+    ended: summary?.ended ?? (c.running ? null : statSync(transcript).mtime.toISOString()),
     requests: u.requests, tokens: u.tokens, usd: u.usd, usageSource: u.source, quota: q,
     series: series(dir, Date.parse(started)),
     commits, files, code, preview, server,

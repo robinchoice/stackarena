@@ -280,7 +280,7 @@ function makeFeed(id) {
 function elapsed(e) {
   const s = e.state;
   if (!s) return { ms: 0, limit: 4 * 3600000 };
-  return { ms: s.summary ? s.summary.minutes * 60000 : Date.now() - Date.parse(s.started), limit: s.limitHours * 3600000 };
+  return { ms: (s.ended ? Date.parse(s.ended) : Date.now()) - Date.parse(s.started), limit: s.limitHours * 3600000 };
 }
 function badge(e) {
   return e.meta.live ? '<span class="live-badge">LIVE</span>' : e.meta.done ? '<span class="done-badge">beendet</span>' : '<span class="done-badge">gestoppt</span>';
