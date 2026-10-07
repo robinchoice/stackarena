@@ -5,12 +5,14 @@ export const PRICE = { input: 4, cacheWrite5m: 5, cacheWrite1h: 8, cacheRead: 0.
 export type Tokens = Record<keyof typeof PRICE, number>;
 
 // Token use of a run. The session files Claude Code keeps in the container hold the final usage of
-// every API message; the stream-json transcript only has values from the start of each message, so
-// it is the fallback when no session copy exists.
+// every API message, subagents included; the stream-json transcript only has values from the start
+// of each message, so it is the fallback when no session copy exists.
 export function usage(outDir: string): { requests: number; tokens: Tokens; usd: number; source: string } {
   const sessionDir = `${outDir}/session`;
   const files = existsSync(sessionDir)
-    ? readdirSync(sessionDir).filter((f) => f.endsWith('.jsonl')).map((f) => `${sessionDir}/${f}`)
+    ? (readdirSync(sessionDir, { recursive: true }) as string[])
+        .filter((f) => f.endsWith('.jsonl'))
+        .map((f) => `${sessionDir}/${f}`)
     : [];
   const source = files.length ? 'session' : 'transcript';
   if (!files.length) files.push(`${outDir}/transcript.jsonl`);

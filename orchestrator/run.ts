@@ -94,22 +94,26 @@ const agent = Bun.spawn(
     '--dangerously-skip-permissions', '--output-format', 'stream-json', '--verbose'),
   { env, stdout: Bun.file(`${outDir}/transcript.jsonl`), stderr: Bun.file(`${outDir}/stderr.log`) },
 );
+// Checked against the wall clock: a monotonic timer would stand still while the machine sleeps
+const deadline = started.getTime() + hours * 3_600_000;
 let timedOut = false;
-const timer = setTimeout(() => {
+const timer = setInterval(() => {
+  if (timedOut || Date.now() < deadline) return;
   timedOut = true;
   Bun.spawnSync(['docker', 'stop', '-t', '30', container]);
-}, hours * 3_600_000);
+}, 10_000);
 const exitCode = await agent.exited;
-clearTimeout(timer);
+clearInterval(timer);
 const ended = new Date();
 sh(compose('down', '-v'), { env });
 
 // The final result event exists only if the agent ended the run itself
 let result: Record<string, any> | null = null;
 for (const line of readFileSync(`${outDir}/transcript.jsonl`, 'utf8').split('\n')) {
-  if (!line.startsWith('{"type":"result"')) continue;
+  if (!line.includes('"type":"result"')) continue;
   try {
-    result = JSON.parse(line);
+    const event = JSON.parse(line);
+    if (event.type === 'result') result = event;
   } catch {}
 }
 const used = usage(outDir);
