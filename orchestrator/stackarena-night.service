@@ -1,0 +1,7 @@
+[Unit]
+Description=Start the next Stackarena run if the night is quiet
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/dev/stackarena
+ExecStart=%h/.bun/bin/bun orchestrator/night.ts
