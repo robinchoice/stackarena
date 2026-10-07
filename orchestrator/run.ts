@@ -1,5 +1,8 @@
 // Starts one contest run in a locked-down container and records time, tokens and cost.
-//   bun orchestrator/run.ts --team backend/bun [--run 1] [--hours 4] [--smoke]
+// Run it as its own user unit, so it outlives the shell or agent session that started it:
+//   systemd-run --user --unit stackarena-backend-bun-1 --same-dir --collect \
+//     bun orchestrator/run.ts --team backend/bun [--run 1] [--hours 4] [--smoke]
+// Follow it with journalctl --user -fu stackarena-backend-bun-1.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { parseArgs } from 'node:util';
