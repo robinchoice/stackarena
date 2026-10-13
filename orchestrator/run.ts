@@ -11,6 +11,8 @@ import { usage } from './usage';
 const REPO = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const MODEL = 'claude-opus-5-5';
 const EFFORT = 'xhigh';
+// Workspace of the API key in the Claude Console; the key is not scoped to it, so requests name it
+const WORKSPACE = 'wrkspc_01LFUA1D63QwXUTV6V4wna2Y';
 
 const { values } = parseArgs({
   options: {
@@ -114,17 +116,33 @@ const agent = (credentials: Record<string, string>, args: string[]) =>
     },
   ).exited;
 
+// The final result event exists only if the agent ended the session itself
+function lastResult(): Record<string, any> | null {
+  let result = null;
+  for (const line of readFileSync(transcriptFile, 'utf8').split('\n')) {
+    if (!line.includes('"type":"result"')) continue;
+    try {
+      const event = JSON.parse(line);
+      if (event.type === 'result') result = event;
+    } catch {}
+  }
+  return result;
+}
+
 console.log(`${id}: started ${started.toISOString()}, limit ${hours} h, ${apiKey ? 'API credits' : 'subscription'}`);
 let billing = apiKey ? 'api' : 'subscription';
-let exitCode = await agent(apiKey ? { ANTHROPIC_API_KEY: apiKey } : { CLAUDE_CODE_OAUTH_TOKEN: token }, ['-p', prompt]);
-// Used-up credits end the session with an API error. The run carries on in the same session on the
-// subscription until its deadline, so it stays comparable to the others.
-const sessionId = /"session_id":"([^"]+)"/.exec(readFileSync(transcriptFile, 'utf8'))?.[1];
-if (apiKey && !timedOut && sessionId && /credit balance is too low/i.test(readFileSync(transcriptFile, 'utf8'))) {
+const credentials = apiKey
+  ? { ANTHROPIC_API_KEY: apiKey, ANTHROPIC_CUSTOM_HEADERS: `anthropic-workspace-id: ${WORKSPACE}` }
+  : { CLAUDE_CODE_OAUTH_TOKEN: token };
+let exitCode = await agent(credentials, ['-p', prompt]);
+// Used-up credits or a key the API refuses end the session with an API error. The run carries on in
+// the same session on the subscription until its deadline, so it stays comparable to the others.
+const failed = lastResult();
+if (apiKey && !timedOut && failed?.is_error && failed.api_error_status && failed.session_id) {
   billing = 'api+subscription';
-  console.log(`${id}: API credits used up, continuing on the subscription`);
+  console.log(`${id}: API key failed with ${failed.api_error_status}, continuing on the subscription`);
   exitCode = await agent({ CLAUDE_CODE_OAUTH_TOKEN: token }, [
-    '--resume', sessionId, '-p',
+    '--resume', failed.session_id, '-p',
     'The run continues after an API error that interrupted it. Carry on where you left off.',
   ]);
 }
@@ -132,15 +150,7 @@ clearInterval(timer);
 const ended = new Date();
 sh(compose('down', '-v'), { env });
 
-// The final result event exists only if the agent ended the run itself
-let result: Record<string, any> | null = null;
-for (const line of readFileSync(transcriptFile, 'utf8').split('\n')) {
-  if (!line.includes('"type":"result"')) continue;
-  try {
-    const event = JSON.parse(line);
-    if (event.type === 'result') result = event;
-  } catch {}
-}
+const result = lastResult();
 const used = usage(outDir);
 const finalCommit = sh(['git', 'rev-parse', 'HEAD'], { cwd: runDir });
 const changed = sh(['git', 'diff', '--name-only', startCommit, finalCommit], { cwd: runDir }).split('\n').filter(Boolean);
