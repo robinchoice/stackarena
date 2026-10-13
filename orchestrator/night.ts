@@ -1,7 +1,8 @@
 // Starts the next contest run at night when nothing else is going on. stackarena-night.timer calls it
 // every 15 minutes from 21:00 to 00:00; one run at a time, teams in the order of teams.json with
 // backends first. A run gets 4 hours and ends by 04:00, so the 5-hour window of the subscription
-// that holds its last request closes by 09:00 at the latest.
+// that holds its last request closes by 09:00 at the latest. Runs with the API key draw on the API
+// credits instead and touch the subscription only once those are used up.
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 

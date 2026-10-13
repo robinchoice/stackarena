@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
-// List prices in $ per million tokens for claude-opus-5-5; subscription runs are valued at these
+// List prices in $ per million tokens for claude-opus-5-5. Runs with the API key pay these from the
+// monthly API credits; subscription runs are valued at them
 export const PRICE = { input: 4, cacheWrite5m: 5, cacheWrite1h: 8, cacheRead: 0.2, output: 20 };
 export type Tokens = Record<keyof typeof PRICE, number>;
 

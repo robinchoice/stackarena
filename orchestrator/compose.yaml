@@ -38,7 +38,9 @@ services:
       # Claude Code's own session log holds the final token counts of every message
       - ${OUT_DIR}/session:/home/agent/.claude/projects/-work
     environment:
-      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      # Passed through only when set, so the agent sees one kind of credentials
+      ANTHROPIC_API_KEY:
+      CLAUDE_CODE_OAUTH_TOKEN:
       DISABLE_AUTOUPDATER: "1"
       DATABASE_URL: postgres://stackarena:stackarena@db:5432/stackarena
       STACKARENA_API_URL: http://api:18080

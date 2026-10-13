@@ -3,7 +3,7 @@
 //   systemd-run --user --unit stackarena-backend-bun-1 --same-dir --collect \
 //     bun orchestrator/run.ts --team backend/bun [--run 1] [--hours 4] [--smoke]
 // Follow it with journalctl --user -fu stackarena-backend-bun-1.
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { parseArgs } from 'node:util';
 import { usage } from './usage';
@@ -40,8 +40,13 @@ function sh(cmd: string[], opts: { cwd?: string; env?: Record<string, string | u
   return r.stdout.toString().trim();
 }
 
-const secret = /^export CLAUDE_STACKARENA_TOKEN=(.+)$/m.exec(readFileSync(`${homedir()}/.secrets`, 'utf8'))?.[1];
-const token = secret?.replace(/^['"]|['"]$/g, '');
+const secrets = readFileSync(`${homedir()}/.secrets`, 'utf8');
+const secret = (name: string) =>
+  new RegExp(`^export ${name}=(.+)$`, 'm').exec(secrets)?.[1].replace(/^['"]|['"]$/g, '') || undefined;
+// The API key draws on the monthly API credits of the Max plan; the subscription token stays the
+// fallback for when they run out.
+const apiKey = secret('ANTHROPIC_STACKARENA_API_KEY');
+const token = secret('CLAUDE_STACKARENA_TOKEN');
 if (!token) throw new Error('CLAUDE_STACKARENA_TOKEN is missing in ~/.secrets (create it with claude setup-token)');
 
 // A fresh repository with spec and harness only. The reference API never enters it, and a separate
@@ -72,14 +77,15 @@ const prompt = values.smoke
 writeFileSync(`${outDir}/prompt.md`, prompt);
 
 const project = `stackarena-${id}`;
+// Credentials from the calling shell must not reach the agent; agent() adds exactly one kind
+const { ANTHROPIC_API_KEY: _, CLAUDE_CODE_OAUTH_TOKEN: __, ...hostEnv } = process.env;
 const env = {
-  ...process.env,
+  ...hostEnv,
   REPO,
   RUN_DIR: runDir,
   OUT_DIR: outDir,
   GIT_NAME: `Team ${team.name}`,
   GIT_EMAIL: `${kind}-${slug}@stackarena.test`,
-  CLAUDE_CODE_OAUTH_TOKEN: token,
 };
 const compose = (...args: string[]) => [
   'docker', 'compose', '-f', `${REPO}/orchestrator/compose.yaml`, '-p', project, '--profile', kind, ...args,
@@ -87,13 +93,8 @@ const compose = (...args: string[]) => [
 sh(compose('up', '-d', '--wait', kind === 'backend' ? 'db' : 'api'), { env });
 
 const container = `${project}-agent`;
+const transcriptFile = `${outDir}/transcript.jsonl`;
 const started = new Date();
-console.log(`${id}: started ${started.toISOString()}, limit ${hours} h`);
-const agent = Bun.spawn(
-  compose('run', '--rm', '-T', '--name', container, 'agent', 'claude', '-p', prompt, '--model', MODEL, '--effort', EFFORT,
-    '--dangerously-skip-permissions', '--output-format', 'stream-json', '--verbose'),
-  { env, stdout: Bun.file(`${outDir}/transcript.jsonl`), stderr: Bun.file(`${outDir}/stderr.log`) },
-);
 // Checked against the wall clock: a monotonic timer would stand still while the machine sleeps
 const deadline = started.getTime() + hours * 3_600_000;
 let timedOut = false;
@@ -102,14 +103,38 @@ const timer = setInterval(() => {
   timedOut = true;
   Bun.spawnSync(['docker', 'stop', '-t', '30', container]);
 }, 10_000);
-const exitCode = await agent.exited;
+const agent = (credentials: Record<string, string>, args: string[]) =>
+  Bun.spawn(
+    compose('run', '--rm', '-T', '--name', container, 'agent', 'claude', ...args, '--model', MODEL, '--effort', EFFORT,
+      '--dangerously-skip-permissions', '--output-format', 'stream-json', '--verbose'),
+    {
+      env: { ...env, ...credentials },
+      stdout: openSync(transcriptFile, 'a'),
+      stderr: openSync(`${outDir}/stderr.log`, 'a'),
+    },
+  ).exited;
+
+console.log(`${id}: started ${started.toISOString()}, limit ${hours} h, ${apiKey ? 'API credits' : 'subscription'}`);
+let billing = apiKey ? 'api' : 'subscription';
+let exitCode = await agent(apiKey ? { ANTHROPIC_API_KEY: apiKey } : { CLAUDE_CODE_OAUTH_TOKEN: token }, ['-p', prompt]);
+// Used-up credits end the session with an API error. The run carries on in the same session on the
+// subscription until its deadline, so it stays comparable to the others.
+const sessionId = /"session_id":"([^"]+)"/.exec(readFileSync(transcriptFile, 'utf8'))?.[1];
+if (apiKey && !timedOut && sessionId && /credit balance is too low/i.test(readFileSync(transcriptFile, 'utf8'))) {
+  billing = 'api+subscription';
+  console.log(`${id}: API credits used up, continuing on the subscription`);
+  exitCode = await agent({ CLAUDE_CODE_OAUTH_TOKEN: token }, [
+    '--resume', sessionId, '-p',
+    'The run continues after an API error that interrupted it. Carry on where you left off.',
+  ]);
+}
 clearInterval(timer);
 const ended = new Date();
 sh(compose('down', '-v'), { env });
 
 // The final result event exists only if the agent ended the run itself
 let result: Record<string, any> | null = null;
-for (const line of readFileSync(`${outDir}/transcript.jsonl`, 'utf8').split('\n')) {
+for (const line of readFileSync(transcriptFile, 'utf8').split('\n')) {
   if (!line.includes('"type":"result"')) continue;
   try {
     const event = JSON.parse(line);
@@ -132,12 +157,14 @@ const summary = {
   limitHours: hours,
   timedOut,
   exitCode,
+  billing,
   outcome: result?.subtype ?? (timedOut ? 'time_limit' : 'no_result'),
-  turns: result?.num_turns ?? null,
+  turns: billing === 'api+subscription' ? null : (result?.num_turns ?? null),
   requests: used.requests,
   tokens: used.tokens,
   usageSource: used.source,
-  listPriceUsd: Math.round((result?.total_cost_usd ?? used.usd) * 100) / 100,
+  // The result event of a resumed session counts its second part only
+  listPriceUsd: Math.round(((billing === 'api+subscription' ? null : result?.total_cost_usd) ?? used.usd) * 100) / 100,
   commits: Number(sh(['git', 'rev-list', '--count', `${startCommit}..${finalCommit}`], { cwd: runDir })),
   finalCommit,
   changedFiles: changed.length,
