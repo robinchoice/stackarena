@@ -70,6 +70,11 @@ if (existsSync(packDir) || existsSync(outDir)) throw new Error(`${run} has been 
 mkdirSync(`${packDir}/out`, { recursive: true });
 mkdirSync(outDir, { recursive: true });
 
+// Containers need a network of their own: on the default bridge their resolver is the host's, which
+// init.sh rejects along with the rest of the private network
+const network = `stackarena-decompile-${run}`;
+sh(['bash', '-c', `docker network inspect ${network} >/dev/null 2>&1 || docker network create ${network}`]);
+
 // The backend address is a one-off, so a build that carries it cannot have it from anywhere else
 const apiUrl = `http://api-${crypto.randomUUID().slice(0, 8)}.stackarena.test:18080`;
 const ASK = questions(apiUrl);
@@ -102,7 +107,7 @@ async function agent(name: string, a: Agent) {
     Bun.spawn(
       [
         'docker', 'run', '--rm', '--name', container,
-        '--cap-add', 'NET_ADMIN', '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
+        '--network', network, '--cap-add', 'NET_ADMIN', '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
         '--cpus', '6', '--memory', '12g', '--shm-size', '1g',
         ...a.mounts.flatMap((m) => ['-v', m]),
         '-v', `${a.dir}/session:/home/agent/.claude/projects/-work`,
@@ -157,6 +162,7 @@ async function agent(name: string, a: Agent) {
     exitCode,
     billing,
     outcome: result?.subtype ?? (timedOut ? 'time_limit' : 'no_result'),
+    error: result?.is_error ? String(result.result).slice(0, 200) : null,
     requests: used.requests,
     tokens: used.tokens,
     usageSource: used.source,
@@ -261,4 +267,5 @@ const report = {
 };
 writeFileSync(`${REPO}/results/runs/${run}/decompilation.json`, `${JSON.stringify(report, null, 2)}\n`);
 rmSync(`${packDir}/work`, { recursive: true, force: true });
+sh(['docker', 'network', 'rm', network]);
 console.log(JSON.stringify(report, null, 2));
