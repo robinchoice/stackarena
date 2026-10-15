@@ -5,7 +5,7 @@
 // Like a contest run it is best started as its own user unit, so it outlives the session:
 //   systemd-run --user --unit stackarena-decompile-client-dart-1 --same-dir --collect \
 //     bun orchestrator/decompile.ts --run client-dart-1
-import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { parseArgs } from 'node:util';
 import { questions } from './questions';
@@ -209,7 +209,7 @@ if (values.smoke) {
 const results: Record<string, any> = {};
 for (const target of TARGETS) {
   const input = `${packDir}/out/${target}`;
-  if (!existsSync(input) || !sh(['bash', '-c', `ls -A "${input}" | head -1`])) continue;
+  if (!existsSync(input) || !readdirSync(input).length) continue;
   const dir = `${outDir}/${target}`;
   const work = `${packDir}/work/${target}`;
   mkdirSync(`${dir}/out`, { recursive: true });
