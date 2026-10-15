@@ -28,7 +28,8 @@ if (end <= now) end.setDate(end.getDate() + 1);
 const spareHours = (end.getTime() - now.getTime()) / 3_600_000 - HOURS;
 if (spareHours < 0 || spareHours > 3) skip('outside the start window');
 
-if (sh(['systemctl', '--user', 'list-units', 'stackarena-*', '--state=active', '--plain', '--no-legend']))
+const runUnits = ['stackarena-backend-*.service', 'stackarena-client-*.service'];
+if (sh(['systemctl', '--user', 'list-units', ...runUnits, '--state=active', '--plain', '--no-legend']))
   skip('a run is going');
 if (sh(['docker', 'ps', '-q', '--filter', 'name=stackarena-'])) skip('contest containers are running');
 
