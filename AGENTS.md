@@ -13,7 +13,7 @@ Kein Test-Setup für den Orchestrator. Nach Änderungen an `run.ts` einen Smoke-
 
 ## Deploy
 
-Kein Deploy. Nachtläufe startet der User-Timer `stackarena-night.timer` (21:00–00:00 alle 15 min),
+Kein Deploy. Nachtläufe startet der User-Timer `stackarena-night.timer` (00:00–00:45 alle 15 min),
 eingerichtet mit `systemctl --user link orchestrator/stackarena-night.{service,timer}` und
 `systemctl --user enable --now stackarena-night.timer`. Log: `journalctl --user -u stackarena-night`,
 laufender Lauf: `journalctl --user -fu stackarena-<id>`.
@@ -28,8 +28,8 @@ laufender Lauf: `journalctl --user -fu stackarena-<id>`.
   einem API-Fehler (Guthaben aufgebraucht, Key abgelehnt), setzt `run.ts` sie mit dem Abo-Token fort
   (`billing: "api+subscription"`).
 - Ohne Key oder nach dem Rückfall nutzen Läufe das Claude-Abo von Robin (`CLAUDE_STACKARENA_TOKEN`)
-  und teilen sich das 5h-Limit mit ihm. Deshalb enden Nachtläufe spätestens um 04:00, und `night.ts`
-  startet nur, wenn 20 Minuten lang keine Claude- oder Codex-Session aktiv war.
+  und teilen sich das 5h-Limit mit ihm. Deshalb starten Nachtläufe erst ab 00:00, enden spätestens um
+  05:00, und `night.ts` startet nur, wenn 20 Minuten lang keine Claude- oder Codex-Session aktiv war.
 - `run.ts` liest den Stand von `HEAD` (`git archive`), uncommittete Änderungen an `spec/` und
   `harness/` gehen nicht in den Lauf.
 - Ein abgebrochener Lauf blockiert seine ID: `runs/<id>` und `results/runs/<id>` nach
