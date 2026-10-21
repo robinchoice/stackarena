@@ -1,10 +1,9 @@
-# Install: systemctl --user link orchestrator/stackarena-night.{service,timer}
-#          systemctl --user enable --now stackarena-night.timer
 [Unit]
-Description=Stackarena night runs, start window 00:00 to 00:45
+Description=Stackarena night runs, start window 01:30 to 02:15
 
 [Timer]
-OnCalendar=*-*-* 00:00,15,30,45
+OnCalendar=*-*-* 01:30,45
+OnCalendar=*-*-* 02:00,15
 
 [Install]
 WantedBy=timers.target

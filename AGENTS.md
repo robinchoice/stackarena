@@ -37,9 +37,14 @@ Tokens und Kosten. Eigene Builds kommen nicht ins Repo Mirksen/rea: dort stehen 
 
 ## Deploy
 
-Kein Deploy. Nachtläufe startet der User-Timer `stackarena-night.timer` (00:00–00:45 alle 15 min),
-eingerichtet mit `systemctl --user link orchestrator/stackarena-night.{service,timer}` und
-`systemctl --user enable --now stackarena-night.timer`. Log: `journalctl --user -u stackarena-night`,
+Kein Deploy. Nachtläufe startet der User-Timer `stackarena-night.timer` (01:30–02:15 alle 15 min,
+nach der Savor-Nachtschicht ab 00:00, die bis etwa 01:30 dauert), eingerichtet mit
+`systemctl --user link orchestrator/stackarena-night.{service,timer}` und
+`systemctl --user enable --now stackarena-night.timer`, nach Änderungen
+`systemctl --user daemon-reload`. Der Start um 01:30 bekommt 3,25 h, spätere entsprechend weniger,
+jeder Lauf endet gegen 04:45. `night.ts` zählt einen Start erst, wenn die Unit nach einer Minute noch
+läuft, sonst versucht es nach 30 s genau einmal neu und verschiebt Angelegtes nach `results/aborted/`,
+damit das Team als Nächstes dran bleibt. Log: `journalctl --user -u stackarena-night`,
 laufender Lauf: `journalctl --user -fu stackarena-<id>`.
 
 ## Fallen
@@ -52,8 +57,11 @@ laufender Lauf: `journalctl --user -fu stackarena-<id>`.
   einem API-Fehler (Guthaben aufgebraucht, Key abgelehnt), setzt `run.ts` sie mit dem Abo-Token fort
   (`billing: "api+subscription"`).
 - Ohne Key oder nach dem Rückfall nutzen Läufe das Claude-Abo von Robin (`CLAUDE_STACKARENA_TOKEN`)
-  und teilen sich das 5h-Limit mit ihm. Deshalb starten Nachtläufe erst ab 00:00, enden spätestens um
-  05:00, und `night.ts` startet nur, wenn 20 Minuten lang keine Claude- oder Codex-Session aktiv war.
+  und teilen sich das 5h-Limit mit ihm. Deshalb enden Nachtläufe spätestens um 05:00, und `night.ts`
+  startet nur, wenn 20 Minuten lang keine Claude- oder Codex-Session aktiv war, die jemand begonnen
+  hat. Sessions der Savor-Workflows zählen nicht, sie laufen fast die ganze Nacht: `night.ts` erkennt
+  sie an `workflow` oder `unattended` in `~/dev/*/.savor/threads/*/thread.json`. Ändert Savor dieses
+  Format, blockt jede Workflow-Session wieder den Start.
 - `run.ts` liest den Stand von `HEAD` (`git archive`), uncommittete Änderungen an `spec/` und
   `harness/` gehen nicht in den Lauf.
 - Ein abgebrochener Lauf blockiert seine ID: `runs/<id>` und `results/runs/<id>` nach
