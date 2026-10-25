@@ -55,7 +55,8 @@ laufender Lauf: `journalctl --user -fu stackarena-<id>`.
   nicht das Abo. `listPriceUsd` in `summary.json` ist dann echter Guthabenverbrauch, der erste volle
   Lauf (`backend-bun-1`, 89 min) kostete 25,57 $. Endet die Session mit
   einem API-Fehler (Guthaben aufgebraucht, Key abgelehnt), setzt `run.ts` sie mit dem Abo-Token fort
-  (`billing: "api+subscription"`).
+  (`billing: "api+subscription"`); `listPriceUsd` ist dann die Listenpreis-Summe beider Teile, der
+  Guthabenverbrauch liegt darunter.
 - Ohne Key oder nach dem Rückfall nutzen Läufe das Claude-Abo von Robin (`CLAUDE_STACKARENA_TOKEN`)
   und teilen sich das 5h-Limit mit ihm. Deshalb enden Nachtläufe spätestens um 05:00, und `night.ts`
   startet nur, wenn 20 Minuten lang keine Claude- oder Codex-Session aktiv war, die jemand begonnen
@@ -63,7 +64,8 @@ laufender Lauf: `journalctl --user -fu stackarena-<id>`.
   sie an `workflow` oder `unattended` in `~/dev/*/.savor/threads/*/thread.json`. Ändert Savor dieses
   Format, blockt jede Workflow-Session wieder den Start.
 - `run.ts` liest den Stand von `HEAD` (`git archive`), uncommittete Änderungen an `spec/` und
-  `harness/` gehen nicht in den Lauf.
+  `harness/` gehen nicht in den Lauf. Nur die Referenz-API der Client-Läufe startet aus dem
+  Arbeitsbaum (`compose.yaml` bindet `harness/` und `spec/` ein).
 - Ein abgebrochener Lauf blockiert seine ID: `runs/<id>` und `results/runs/<id>` nach
   `results/aborted/` verschieben, bevor er neu startet. Genauso blockiert eine fertige Analyse ihre
   ID über `runs/<id>-decompile`.
