@@ -75,8 +75,8 @@ const session = mounts.find(x => x.endsWith(':/home/agent/.claude/projects/-work
 if (name.endsWith('-pack')) {
   mkdirSync(out + '/web', { recursive: true });
   writeFileSync(out + '/web/index.html', 'fixture');
-  writeFileSync(out + '/pack.json', mode === 'bad-pack' ? '{' : JSON.stringify({ web: { built: true } }));
-} else if (out) writeFileSync(out + '/report.json', JSON.stringify({ answers: {} }));
+  writeFileSync(out + '/pack.json', mode === 'bad-pack' ? '{' : JSON.stringify({ web: { built: mode !== 'not-built' } }));
+} else if (out) writeFileSync(out + '/report.json', mode === 'bad-report' ? '{"answers":' : JSON.stringify({ answers: {} }));
 const resumed = args.includes('--resume');
 const fallback = mode.startsWith('fallback');
 const input = name.endsWith('-pack') ? 0 : mode === 'budget' || mode === 'budget-complete' ? 1500000 : mode === 'fallback-budget' ? 700000 : 100000;
@@ -132,10 +132,28 @@ function decompile(mode: string, api = false) {
   return { ...f, result, report: () => JSON.parse(readFileSync(`${f.root}/results/runs/client-dart-1/decompilation.json`, 'utf8')) };
 }
 
-test('a malformed pack report still removes the network', () => {
+test('a cut-off pack report leaves no target to analyse and still removes the network', () => {
   const f = decompile('bad-pack');
-  expect(f.result.exitCode).not.toBe(0);
+  expect(f.result.exitCode).toBe(0);
+  expect(f.calls().filter((c) => c === 'run')).toHaveLength(1);
   expect(f.calls().at(-1)).toBe('network-rm');
+  expect(f.report().targets).toEqual({});
+  expect(f.report().pack.run.outcome).toBe('success');
+});
+
+test('a target the packer did not report as built is not analysed', () => {
+  const f = decompile('not-built');
+  expect(f.result.exitCode).toBe(0);
+  expect(f.calls().filter((c) => c === 'run')).toHaveLength(1);
+  expect(f.report().targets).toEqual({});
+  expect(f.report().pack.web.built).toBe(false);
+});
+
+test('a cut-off analysis report scores zero instead of failing the run', () => {
+  const f = decompile('bad-report');
+  expect(f.result.exitCode).toBe(0);
+  expect(f.calls().at(-1)).toBe('network-rm');
+  expect(f.report().targets.web).toMatchObject({ outcome: 'success', hits: 0, hitRate: 0, answers: {} });
 });
 
 test('subscription analysis stops at the list-price budget', () => {

@@ -184,6 +184,17 @@ async function agent(name: string, a: Agent) {
   };
 }
 
+// A report the agent left behind. A file cut off by the stop at the deadline counts as none.
+function readJson(file: string): Record<string, any> {
+  if (!existsSync(file)) return {};
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'));
+  } catch (e) {
+    console.log(`${run}: ${file} is not valid JSON: ${(e as Error).message}`);
+    return {};
+  }
+}
+
 const template = (file: string, fill: Record<string, string>) =>
   Object.entries(fill).reduce((s, [k, v]) => s.replaceAll(`{{${k}}}`, v), readFileSync(`${REPO}/orchestrator/${file}`, 'utf8'));
 
@@ -219,15 +230,15 @@ try {
       mounts: [`${src}:/work`, `${packDir}/out:/out`],
       env: { STACKARENA_API_URL: apiUrl },
     });
-    const file = `${packDir}/out/pack.json`;
-    pack = { ...(existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {}), run: packRun };
+    pack = { ...readJson(`${packDir}/out/pack.json`), run: packRun };
   }
 
-  // Step 2: one analysis per target that shipped something
+  // Step 2: one analysis per target whose build finished. Files of a build the packer did not
+  // report as built, for example one stopped at the deadline, are not analysed.
   const results: Record<string, any> = {};
   for (const target of TARGETS) {
     const input = `${packDir}/out/${target}`;
-    if (!existsSync(input) || !readdirSync(input).length) continue;
+    if (pack[target]?.built !== true || !existsSync(input) || !readdirSync(input).length) continue;
     const dir = `${outDir}/${target}`;
     const work = `${packDir}/work/${target}`;
     mkdirSync(`${dir}/out`, { recursive: true });
@@ -251,8 +262,7 @@ try {
         `${SKILL}:/home/agent/.claude/skills/reverse-engineer-anything:ro`,
       ],
     });
-    const file = `${dir}/out/report.json`;
-    const report = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
+    const report = readJson(`${dir}/out/report.json`);
     const answers = report.answers ?? {};
     const scores = Object.fromEntries(ASK.map((q) => [q.id, Math.round(q.score(answers[q.id]?.answer) * 100) / 100]));
     const hits = Object.values(scores).reduce((a, b) => a + b, 0);
