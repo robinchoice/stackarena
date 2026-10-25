@@ -72,9 +72,7 @@ mkdirSync(outDir, { recursive: true });
 
 // Containers need a network of their own: on the default bridge their resolver is the host's, which
 // init.sh rejects along with the rest of the private network
-const sourceCommit = sh(['git', '-C', REPO, 'rev-parse', 'HEAD']);
 const network = `stackarena-decompile-${run}`;
-sh(['bash', '-c', `docker network inspect ${network} >/dev/null 2>&1 || docker network create ${network}`]);
 
 // The backend address is a one-off, so a build that carries it cannot have it from anywhere else
 const apiUrl = `http://api-${crypto.randomUUID().slice(0, 8)}.stackarena.test:18080`;
@@ -100,7 +98,7 @@ async function agent(name: string, a: Agent) {
   const deadline = started.getTime() + a.minutes * 60_000;
   let timedOut = false;
   const timer = setInterval(() => {
-    if (timedOut || Date.now() < deadline) return;
+    if (Date.now() < deadline) return;
     timedOut = true;
     Bun.spawnSync(['docker', 'stop', '-t', '30', container]);
   }, 10_000);
@@ -134,22 +132,29 @@ async function agent(name: string, a: Agent) {
 
   let billing = apiKey ? 'api' : 'subscription';
   console.log(`${run} ${name}: started ${started.toISOString()}, ${a.minutes} min, ${a.budget} $, ${billing}`);
-  let exitCode = await start(
-    apiKey
-      ? { ANTHROPIC_API_KEY: apiKey, ANTHROPIC_CUSTOM_HEADERS: `anthropic-workspace-id: ${WORKSPACE}` }
-      : { CLAUDE_CODE_OAUTH_TOKEN: token! },
-    ['-p', a.prompt],
-  );
-  const failed = lastResult();
-  if (apiKey && !timedOut && failed?.is_error && failed.api_error_status && failed.session_id) {
-    billing = 'api+subscription';
-    console.log(`${run} ${name}: API key failed with ${failed.api_error_status}, continuing on the subscription`);
-    exitCode = await start({ CLAUDE_CODE_OAUTH_TOKEN: token! }, [
-      '--resume', failed.session_id, '-p',
-      'The analysis continues after an API error that interrupted it. Carry on where you left off.',
-    ]);
+  let exitCode = 0;
+  let completed = false;
+  try {
+    exitCode = await start(
+      apiKey
+        ? { ANTHROPIC_API_KEY: apiKey, ANTHROPIC_CUSTOM_HEADERS: `anthropic-workspace-id: ${WORKSPACE}` }
+        : { CLAUDE_CODE_OAUTH_TOKEN: token! },
+      ['-p', a.prompt],
+    );
+    const failed = lastResult();
+    if (apiKey && !timedOut && failed?.is_error && failed.api_error_status && failed.session_id) {
+      billing = 'api+subscription';
+      console.log(`${run} ${name}: API key failed with ${failed.api_error_status}, continuing on the subscription`);
+      exitCode = await start({ CLAUDE_CODE_OAUTH_TOKEN: token! }, [
+        '--resume', failed.session_id, '-p',
+        'The analysis continues after an API error that interrupted it. Carry on where you left off.',
+      ]);
+    }
+    completed = true;
+  } finally {
+    clearInterval(timer);
+    if (!completed) Bun.spawnSync(['docker', 'rm', '-f', container]);
   }
-  clearInterval(timer);
   const ended = new Date();
   const result = lastResult();
   const used = usage(a.dir);
@@ -162,7 +167,7 @@ async function agent(name: string, a: Agent) {
     timedOut,
     exitCode,
     billing,
-    outcome: result?.subtype ?? (timedOut ? 'time_limit' : 'no_result'),
+    outcome: timedOut ? 'time_limit' : (result?.subtype ?? 'no_result'),
     error: result?.is_error ? String(result.result).slice(0, 200) : null,
     requests: used.requests,
     tokens: used.tokens,
@@ -175,98 +180,105 @@ async function agent(name: string, a: Agent) {
 const template = (file: string, fill: Record<string, string>) =>
   Object.entries(fill).reduce((s, [k, v]) => s.replaceAll(`{{${k}}}`, v), readFileSync(`${REPO}/orchestrator/${file}`, 'utf8'));
 
-// Step 1: build what ships. The smoke client has a build script, a team's repo needs an agent that
-// knows its stack.
-let pack: Record<string, any>;
-if (values.smoke) {
-  sh(['bash', '-c', `git -C "${REPO}" archive ${sourceCommit} spec orchestrator/decompile-smoke | tar -x -C "${packDir}"`]);
-  const build = 'orchestrator/decompile-smoke/build-web.sh';
-  sh(['bash', build], { cwd: packDir, env: { ...process.env, STACKARENA_API_URL: apiUrl } });
-  sh(['cp', '-r', `${packDir}/orchestrator/decompile-smoke/dist`, `${packDir}/out/web`]);
-  pack = { web: { built: true, command: build, note: 'built on the host, no agent' }, linux: { built: false } };
-} else {
-  const [kind, slug] = teamKey.split('/');
-  const src = `${packDir}/src`;
-  mkdirSync(src, { recursive: true });
-  sh(['bash', '-c', `git -C "${REPO}/runs/${run}" archive HEAD | tar -x -C "${src}"`]);
-  const packRun = await agent('pack', {
-    image: 'stackarena-run:2',
-    dir: `${outDir}/pack`,
-    prompt: template('pack.md', {
-      NAME: team.name,
-      STACK: team.stack,
-      FOLDER: `${kind}s/${slug}`,
-      MINUTES: String(PACK.minutes),
-    }),
-    ...PACK,
-    mounts: [`${src}:/work`, `${packDir}/out:/out`],
-    env: { STACKARENA_API_URL: apiUrl },
-  });
-  const file = `${packDir}/out/pack.json`;
-  pack = { ...(existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {}), run: packRun };
-}
+const sourceCommit = sh(['git', '-C', REPO, 'rev-parse', 'HEAD']);
+let networkCreated = false;
+try {
+  sh(['bash', '-c', `docker network inspect ${network} >/dev/null 2>&1 || docker network create ${network}`]);
+  networkCreated = true;
+  // Step 1: build what ships. The smoke client has a build script, a team's repo needs an agent that
+  // knows its stack.
+  let pack: Record<string, any>;
+  if (values.smoke) {
+    sh(['bash', '-c', `git -C "${REPO}" archive ${sourceCommit} spec orchestrator/decompile-smoke | tar -x -C "${packDir}"`]);
+    const build = 'orchestrator/decompile-smoke/build-web.sh';
+    sh(['bash', build], { cwd: packDir, env: { ...process.env, STACKARENA_API_URL: apiUrl } });
+    sh(['cp', '-r', `${packDir}/orchestrator/decompile-smoke/dist`, `${packDir}/out/web`]);
+    pack = { web: { built: true, command: build, note: 'built on the host, no agent' }, linux: { built: false } };
+  } else {
+    const [kind, slug] = teamKey.split('/');
+    const src = `${packDir}/src`;
+    mkdirSync(src, { recursive: true });
+    sh(['bash', '-c', `git -C "${REPO}/runs/${run}" archive HEAD | tar -x -C "${src}"`]);
+    const packRun = await agent('pack', {
+      image: 'stackarena-run:2',
+      dir: `${outDir}/pack`,
+      prompt: template('pack.md', {
+        NAME: team.name,
+        STACK: team.stack,
+        FOLDER: `${kind}s/${slug}`,
+        MINUTES: String(PACK.minutes),
+      }),
+      ...PACK,
+      mounts: [`${src}:/work`, `${packDir}/out:/out`],
+      env: { STACKARENA_API_URL: apiUrl },
+    });
+    const file = `${packDir}/out/pack.json`;
+    pack = { ...(existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {}), run: packRun };
+  }
 
-// Step 2: one analysis per target that shipped something
-const results: Record<string, any> = {};
-for (const target of TARGETS) {
-  const input = `${packDir}/out/${target}`;
-  if (!existsSync(input) || !readdirSync(input).length) continue;
-  const dir = `${outDir}/${target}`;
-  const work = `${packDir}/work/${target}`;
-  mkdirSync(`${dir}/out`, { recursive: true });
-  mkdirSync(`${work}/input`, { recursive: true });
-  mkdirSync(`${work}/scratch`, { recursive: true });
-  const analysis = await agent(target, {
-    image: 'stackarena-rea:1',
-    dir,
-    prompt: template('decompile.md', {
-      TARGET: target === 'web' ? 'web' : 'Linux desktop',
-      MINUTES: String(ANALYSIS.minutes),
-      BUDGET: String(ANALYSIS.budget),
-      QUESTIONS: ASK.map((q) => `- \`${q.id}\`: ${q.ask}`).join('\n'),
-    }),
-    ...ANALYSIS,
-    mounts: [
-      // /work itself has to be writable for the agent, the build inside it read-only
-      `${work}:/work`,
-      `${input}:/work/input:ro`,
-      `${dir}/out:/out`,
-      `${SKILL}:/home/agent/.claude/skills/reverse-engineer-anything:ro`,
-    ],
-  });
-  const file = `${dir}/out/report.json`;
-  const report = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
-  const answers = report.answers ?? {};
-  const scores = Object.fromEntries(ASK.map((q) => [q.id, Math.round(q.score(answers[q.id]?.answer) * 100) / 100]));
-  const hits = Object.values(scores).reduce((a, b) => a + b, 0);
-  results[target] = {
-    ...analysis,
-    hits: Math.round(hits * 100) / 100,
-    hitRate: Math.round((hits / ASK.length) * 100) / 100,
-    scores,
-    tools: report.tools ?? [],
-    note: report.note ?? null,
-    answers,
+  // Step 2: one analysis per target that shipped something
+  const results: Record<string, any> = {};
+  for (const target of TARGETS) {
+    const input = `${packDir}/out/${target}`;
+    if (!existsSync(input) || !readdirSync(input).length) continue;
+    const dir = `${outDir}/${target}`;
+    const work = `${packDir}/work/${target}`;
+    mkdirSync(`${dir}/out`, { recursive: true });
+    mkdirSync(`${work}/input`, { recursive: true });
+    mkdirSync(`${work}/scratch`, { recursive: true });
+    const analysis = await agent(target, {
+      image: 'stackarena-rea:1',
+      dir,
+      prompt: template('decompile.md', {
+        TARGET: target === 'web' ? 'web' : 'Linux desktop',
+        MINUTES: String(ANALYSIS.minutes),
+        BUDGET: String(ANALYSIS.budget),
+        QUESTIONS: ASK.map((q) => `- \`${q.id}\`: ${q.ask}`).join('\n'),
+      }),
+      ...ANALYSIS,
+      mounts: [
+        // /work itself has to be writable for the agent, the build inside it read-only
+        `${work}:/work`,
+        `${input}:/work/input:ro`,
+        `${dir}/out:/out`,
+        `${SKILL}:/home/agent/.claude/skills/reverse-engineer-anything:ro`,
+      ],
+    });
+    const file = `${dir}/out/report.json`;
+    const report = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
+    const answers = report.answers ?? {};
+    const scores = Object.fromEntries(ASK.map((q) => [q.id, Math.round(q.score(answers[q.id]?.answer) * 100) / 100]));
+    const hits = Object.values(scores).reduce((a, b) => a + b, 0);
+    results[target] = {
+      ...analysis,
+      hits: Math.round(hits * 100) / 100,
+      hitRate: Math.round((hits / ASK.length) * 100) / 100,
+      scores,
+      tools: report.tools ?? [],
+      note: report.note ?? null,
+      answers,
+    };
+    console.log(`${run} ${target}: ${results[target].hitRate} of the answers, ${analysis.listPriceUsd} $`);
+  }
+
+  const report = {
+    run,
+    team: teamKey,
+    model: MODEL,
+    effort: EFFORT,
+    sourceCommit,
+    apiUrl,
+    questions: ASK.map((q) => q.id),
+    pack,
+    targets: results,
+    listPriceUsd:
+      Math.round(
+        ([pack.run, ...Object.values(results)].reduce((s: number, r: any) => s + (r?.listPriceUsd ?? 0), 0)) * 100,
+      ) / 100,
   };
-  console.log(`${run} ${target}: ${results[target].hitRate} of the answers, ${analysis.listPriceUsd} $`);
+  writeFileSync(`${REPO}/results/runs/${run}/decompilation.json`, `${JSON.stringify(report, null, 2)}\n`);
+  console.log(JSON.stringify(report, null, 2));
+} finally {
+  rmSync(`${packDir}/work`, { recursive: true, force: true });
+  if (networkCreated) sh(['docker', 'network', 'rm', network]);
 }
-
-const report = {
-  run,
-  team: teamKey,
-  model: MODEL,
-  effort: EFFORT,
-  sourceCommit,
-  apiUrl,
-  questions: ASK.map((q) => q.id),
-  pack,
-  targets: results,
-  listPriceUsd:
-    Math.round(
-      ([pack.run, ...Object.values(results)].reduce((s: number, r: any) => s + (r?.listPriceUsd ?? 0), 0)) * 100,
-    ) / 100,
-};
-writeFileSync(`${REPO}/results/runs/${run}/decompilation.json`, `${JSON.stringify(report, null, 2)}\n`);
-rmSync(`${packDir}/work`, { recursive: true, force: true });
-sh(['docker', 'network', 'rm', network]);
-console.log(JSON.stringify(report, null, 2));

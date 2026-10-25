@@ -95,19 +95,15 @@ const env = {
 const compose = (...args: string[]) => [
   'docker', 'compose', '-f', `${REPO}/orchestrator/compose.yaml`, '-p', project, '--profile', kind, ...args,
 ];
-sh(compose('up', '-d', '--wait', kind === 'backend' ? 'db' : 'api'), { env });
 
 const container = `${project}-agent`;
 const transcriptFile = `${outDir}/transcript.jsonl`;
-const started = new Date();
-// Checked against the wall clock: a monotonic timer would stand still while the machine sleeps
-const deadline = started.getTime() + hours * 3_600_000;
+let started = new Date();
+let ended = started;
 let timedOut = false;
-const timer = setInterval(() => {
-  if (timedOut || Date.now() < deadline) return;
-  timedOut = true;
-  Bun.spawnSync(['docker', 'stop', '-t', '30', container]);
-}, 10_000);
+let timer: ReturnType<typeof setInterval> | undefined;
+let exitCode = 0;
+let billing = apiKey ? 'api' : 'subscription';
 const agent = (credentials: Record<string, string>, args: string[]) =>
   Bun.spawn(
     compose('run', '--rm', '-T', '--name', container, 'agent', 'claude', ...args, '--model', MODEL, '--effort', EFFORT,
@@ -132,26 +128,36 @@ function lastResult(): Record<string, any> | null {
   return result;
 }
 
-console.log(`${id}: started ${started.toISOString()}, limit ${hours} h, ${apiKey ? 'API credits' : 'subscription'}`);
-let billing = apiKey ? 'api' : 'subscription';
-const credentials = apiKey
-  ? { ANTHROPIC_API_KEY: apiKey, ANTHROPIC_CUSTOM_HEADERS: `anthropic-workspace-id: ${WORKSPACE}` }
-  : { CLAUDE_CODE_OAUTH_TOKEN: token };
-let exitCode = await agent(credentials, ['-p', prompt]);
-// Used-up credits or a key the API refuses end the session with an API error. The run carries on in
-// the same session on the subscription until its deadline, so it stays comparable to the others.
-const failed = lastResult();
-if (apiKey && !timedOut && failed?.is_error && failed.api_error_status && failed.session_id) {
-  billing = 'api+subscription';
-  console.log(`${id}: API key failed with ${failed.api_error_status}, continuing on the subscription`);
-  exitCode = await agent({ CLAUDE_CODE_OAUTH_TOKEN: token }, [
-    '--resume', failed.session_id, '-p',
-    'The run continues after an API error that interrupted it. Carry on where you left off.',
-  ]);
+try {
+  sh(compose('up', '-d', '--wait', kind === 'backend' ? 'db' : 'api'), { env });
+  started = new Date();
+  const deadline = started.getTime() + hours * 3_600_000;
+  timer = setInterval(() => {
+    if (Date.now() < deadline) return;
+    timedOut = true;
+    Bun.spawnSync(['docker', 'stop', '-t', '30', container]);
+  }, 10_000);
+  console.log(`${id}: started ${started.toISOString()}, limit ${hours} h, ${apiKey ? 'API credits' : 'subscription'}`);
+  const credentials: Record<string, string> = apiKey
+    ? { ANTHROPIC_API_KEY: apiKey, ANTHROPIC_CUSTOM_HEADERS: `anthropic-workspace-id: ${WORKSPACE}` }
+    : { CLAUDE_CODE_OAUTH_TOKEN: token };
+  exitCode = await agent(credentials, ['-p', prompt]);
+  // Used-up credits or a key the API refuses end the session with an API error. The run carries on in
+  // the same session on the subscription until its deadline, so it stays comparable to the others.
+  const failed = lastResult();
+  if (apiKey && !timedOut && failed?.is_error && failed.api_error_status && failed.session_id) {
+    billing = 'api+subscription';
+    console.log(`${id}: API key failed with ${failed.api_error_status}, continuing on the subscription`);
+    exitCode = await agent({ CLAUDE_CODE_OAUTH_TOKEN: token }, [
+      '--resume', failed.session_id, '-p',
+      'The run continues after an API error that interrupted it. Carry on where you left off.',
+    ]);
+  }
+  ended = new Date();
+} finally {
+  clearInterval(timer);
+  sh(compose('down', '-v'), { env });
 }
-clearInterval(timer);
-const ended = new Date();
-sh(compose('down', '-v'), { env });
 
 const result = lastResult();
 const used = usage(outDir);
@@ -171,7 +177,7 @@ const summary = {
   timedOut,
   exitCode,
   billing,
-  outcome: result?.subtype ?? (timedOut ? 'time_limit' : 'no_result'),
+  outcome: timedOut ? 'time_limit' : (result?.subtype ?? 'no_result'),
   turns: billing === 'api+subscription' ? null : (result?.num_turns ?? null),
   requests: used.requests,
   tokens: used.tokens,
