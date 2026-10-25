@@ -13,9 +13,11 @@ const TEAMS: Record<string, { name: string; stack: string }> = JSON.parse(
 
 type Item = Record<string, unknown> & { k: string };
 
-function run(cmd: string[], cwd?: string): string {
-  const r = Bun.spawnSync(cmd, { cwd, stdout: 'pipe', stderr: 'ignore', env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' } });
-  return r.exitCode === 0 ? r.stdout.toString().trim() : '';
+// Async, so git and docker calls for many runs do not block the server
+async function run(cmd: string[], cwd?: string): Promise<string> {
+  const p = Bun.spawn(cmd, { cwd, stdout: 'pipe', stderr: 'ignore', env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' } });
+  const [out, code] = await Promise.all([new Response(p.stdout).text(), p.exited]);
+  return code === 0 ? out.trim() : '';
 }
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -156,8 +158,8 @@ function quota(transcript: string): Item | null {
   return items(transcript.slice(at, end < 0 ? undefined : end))[0] ?? null;
 }
 
-function container(id: string) {
-  const ip = run(['docker', 'inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', `stackarena-${id}-agent`]);
+async function container(id: string) {
+  const ip = await run(['docker', 'inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', `stackarena-${id}-agent`]);
   return { running: ip !== '', ip };
 }
 
@@ -170,15 +172,14 @@ async function reachable(url: string) {
   }
 }
 
-function listRuns() {
+async function listRuns() {
   if (!existsSync(RESULTS)) return [];
-  return readdirSync(RESULTS)
-    .filter((id) => ID.test(id) && existsSync(`${RESULTS}/${id}/transcript.jsonl`))
-    .map((id) => {
-      const done = existsSync(`${RESULTS}/${id}/summary.json`);
-      return { id, ...meta(id), done, live: !done && container(id).running, started: statSync(`${RESULTS}/${id}/prompt.md`).mtime };
-    })
-    .sort((a, b) => +b.started - +a.started);
+  const ids = readdirSync(RESULTS).filter((id) => ID.test(id) && existsSync(`${RESULTS}/${id}/transcript.jsonl`));
+  const list = await Promise.all(ids.map(async (id) => {
+    const done = existsSync(`${RESULTS}/${id}/summary.json`);
+    return { id, ...meta(id), done, live: !done && (await container(id)).running, started: statSync(`${RESULTS}/${id}/prompt.md`).mtime };
+  }));
+  return list.sort((a, b) => +b.started - +a.started);
 }
 
 async function state(id: string) {
@@ -192,8 +193,15 @@ async function state(id: string) {
   const u = cached(`usage:${dir}`, [transcript, ...sessionFiles(dir)], () => usage(dir));
   const q = cached(`quota:${dir}`, [transcript], () => quota(readFileSync(transcript, 'utf8')));
 
-  const first = run(['git', 'rev-list', '--max-parents=0', 'HEAD'], repo);
-  const commits = run(['git', 'log', '--format=%h%x09%cI%x09%s', `${first}..HEAD`], repo)
+  const first = await run(['git', 'rev-list', '--max-parents=0', 'HEAD'], repo);
+  const [log, diff, status, listed, c] = await Promise.all([
+    run(['git', 'log', '--format=%h%x09%cI%x09%s', `${first}..HEAD`], repo),
+    run(['git', 'diff', '--name-status', first, 'HEAD', '--', m.folder], repo),
+    run(['git', 'status', '--porcelain', '--', m.folder], repo),
+    run(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '--', m.folder], repo),
+    container(id),
+  ]);
+  const commits = log
     .split('\n')
     .filter(Boolean)
     .map((l) => {
@@ -201,29 +209,28 @@ async function state(id: string) {
       return { hash, at, subject };
     });
   const changed = new Map<string, string>();
-  for (const l of run(['git', 'diff', '--name-status', first, 'HEAD', '--', m.folder], repo).split('\n').filter(Boolean)) {
+  for (const l of diff.split('\n').filter(Boolean)) {
     const [s, f] = l.split('\t');
     changed.set(f!, s === 'A' ? 'neu' : 'geändert');
   }
-  for (const l of run(['git', 'status', '--porcelain', '--', m.folder], repo).split('\n').filter(Boolean))
+  for (const l of status.split('\n').filter(Boolean))
     changed.set(l.slice(3), 'offen');
-  const files = run(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '--', m.folder], repo)
+  const files = await Promise.all(listed
     .split('\n')
     .filter((f) => f && !f.includes('node_modules/'))
     .slice(0, 600)
-    .map((f) => {
+    .map(async (f) => {
       let lines = 0;
       try {
-        const st = statSync(`${repo}/${f}`);
-        if (st.size < 400_000) lines = readFileSync(`${repo}/${f}`, 'utf8').split('\n').length;
+        const file = Bun.file(`${repo}/${f}`);
+        if (file.size < 400_000) lines = (await file.text()).split('\n').length;
       } catch {}
       return { path: f.slice(m.folder.length + 1), lines, status: changed.get(f) ?? '' };
-    });
+    }));
   const code = files
     .filter((f) => !/(^|\/)([^/]*\.lock|package-lock\.json|[^/]*_snapshot\.json)$/.test(f.path))
     .reduce((s, f) => s + f.lines, 0);
 
-  const c = container(id);
   let preview: string | null = null;
   let server: boolean | null = null;
   if (c.running && m.kind === 'client' && (await reachable(`http://${c.ip}:5173/`))) preview = `http://${c.ip}:5173/`;
@@ -295,7 +302,7 @@ const server = Bun.serve({
     if (url.pathname === '/') return new Response(Bun.file(page));
     if (/^\/fonts\/bricolage-grotesque-latin(-ext)?\.woff2$/.test(url.pathname))
       return new Response(Bun.file(`${REPO}/spec/mockup/${url.pathname.slice(7)}`));
-    if (url.pathname === '/api/runs') return Response.json(listRuns());
+    if (url.pathname === '/api/runs') return Response.json(await listRuns());
     if (!ID.test(id) || !existsSync(`${RESULTS}/${id}/transcript.jsonl`)) return new Response('unknown run', { status: 404 });
     if (url.pathname === '/api/state') return Response.json(await state(id));
     if (url.pathname === '/api/events') return events(id);
