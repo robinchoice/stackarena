@@ -1,7 +1,7 @@
 // Read-only live view of contest runs: bun orchestrator/live/server.ts, then open http://127.0.0.1:4520
 // It tails each run's transcript and looks into the run repository; it never writes to either.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { PRICE, usage } from '../usage';
+import { priceOf, sessionFiles, tokensOf, usage } from '../usage';
 
 const REPO = new URL('../..', import.meta.url).pathname.replace(/\/$/, '');
 const RESULTS = `${REPO}/results/runs`;
@@ -86,9 +86,6 @@ function items(line: string): Item[] {
   return out;
 }
 
-const sessionFiles = (dir: string) =>
-  existsSync(`${dir}/session`) ? readdirSync(`${dir}/session`).filter((f) => f.endsWith('.jsonl')).map((f) => `${dir}/session/${f}`) : [];
-
 // Test results the agent produced itself: bun test (API) and Playwright (web) summaries
 type Tests = { suite: string; pass: number; fail: number; cases: { name: string; ok: boolean }[]; at: string | null; count: number };
 function testRuns(dir: string): Tests[] {
@@ -142,13 +139,7 @@ function series(dir: string, started: number): { m: number; usd: number }[] {
     const out: { m: number; usd: number }[] = [];
     let usd = 0;
     for (const { t, u } of sorted) {
-      usd +=
-        ((u.input_tokens ?? 0) * PRICE.input +
-          (u.output_tokens ?? 0) * PRICE.output +
-          (u.cache_read_input_tokens ?? 0) * PRICE.cacheRead +
-          (u.cache_creation?.ephemeral_5m_input_tokens ?? 0) * PRICE.cacheWrite5m +
-          (u.cache_creation?.ephemeral_1h_input_tokens ?? 0) * PRICE.cacheWrite1h) /
-        1e6;
+      usd += priceOf(tokensOf(u));
       out.push({ m: Math.round((t - started) / 6000) / 10, usd: Math.round(usd * 100) / 100 });
     }
     const step = Math.max(1, Math.ceil(out.length / 80));
