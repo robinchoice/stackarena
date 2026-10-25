@@ -72,6 +72,7 @@ mkdirSync(outDir, { recursive: true });
 
 // Containers need a network of their own: on the default bridge their resolver is the host's, which
 // init.sh rejects along with the rest of the private network
+const sourceCommit = sh(['git', '-C', REPO, 'rev-parse', 'HEAD']);
 const network = `stackarena-decompile-${run}`;
 sh(['bash', '-c', `docker network inspect ${network} >/dev/null 2>&1 || docker network create ${network}`]);
 
@@ -178,7 +179,7 @@ const template = (file: string, fill: Record<string, string>) =>
 // knows its stack.
 let pack: Record<string, any>;
 if (values.smoke) {
-  sh(['bash', '-c', `git -C "${REPO}" archive HEAD spec orchestrator/decompile-smoke | tar -x -C "${packDir}"`]);
+  sh(['bash', '-c', `git -C "${REPO}" archive ${sourceCommit} spec orchestrator/decompile-smoke | tar -x -C "${packDir}"`]);
   const build = 'orchestrator/decompile-smoke/build-web.sh';
   sh(['bash', build], { cwd: packDir, env: { ...process.env, STACKARENA_API_URL: apiUrl } });
   sh(['cp', '-r', `${packDir}/orchestrator/decompile-smoke/dist`, `${packDir}/out/web`]);
@@ -255,7 +256,7 @@ const report = {
   team: teamKey,
   model: MODEL,
   effort: EFFORT,
-  sourceCommit: sh(['git', '-C', REPO, 'rev-parse', 'HEAD']),
+  sourceCommit,
   apiUrl,
   questions: ASK.map((q) => q.id),
   pack,

@@ -55,7 +55,8 @@ if (!token) throw new Error('CLAUDE_STACKARENA_TOKEN is missing in ~/.secrets (c
 // repository keeps it out of reach of git history as well.
 mkdirSync(`${runDir}/${folder}`, { recursive: true });
 mkdirSync(`${outDir}/session`, { recursive: true });
-sh(['bash', '-c', `git -C "${REPO}" archive HEAD spec harness | tar -x -C "${runDir}"`]);
+const sourceCommit = sh(['git', '-C', REPO, 'rev-parse', 'HEAD']);
+sh(['bash', '-c', `git -C "${REPO}" archive ${sourceCommit} spec harness | tar -x -C "${runDir}"`]);
 rmSync(`${runDir}/harness/reference`, { recursive: true, force: true });
 writeFileSync(`${runDir}/${folder}/.gitkeep`, '');
 sh(['git', 'init', '-q'], { cwd: runDir });
@@ -162,7 +163,7 @@ const summary = {
   team: key,
   model: MODEL,
   effort: EFFORT,
-  sourceCommit: sh(['git', '-C', REPO, 'rev-parse', 'HEAD']),
+  sourceCommit,
   started: started.toISOString(),
   ended: ended.toISOString(),
   minutes: Math.round((ended.getTime() - started.getTime()) / 6000) / 10,
