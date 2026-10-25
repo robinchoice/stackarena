@@ -181,7 +181,11 @@ async function loadRuns() {
   renderTeams();
   route();
 }
+// A round can take longer than the interval, so rounds never overlap
+let polling = false;
 async function refreshStates() {
+  if (polling) return;
+  polling = true;
   await Promise.all(visible().map(async (e) => {
     try {
       const s = await (await fetch(`/api/state?run=${e.id}`)).json();
@@ -190,7 +194,9 @@ async function refreshStates() {
       e.state = s;
     } catch {}
   }));
+  polling = false;
   update();
+  syncStreams();
 }
 
 /* ---------- ticker: commits, test runs, server up ---------- */
@@ -267,13 +273,50 @@ function makeFeed(id) {
     if (node) el.appendChild(node);
     if (stick) el.scrollTop = el.scrollHeight;
   }
-  const src = new EventSource(`/api/events?run=${id}`);
-  src.onmessage = (m) => {
-    const { at, items } = JSON.parse(m.data);
-    for (const it of items) add(it, at);
-    if (at === null) el.scrollTop = el.scrollHeight;
+  // Every (re)connect starts with the whole transcript (at: null), so the feed is rebuilt from it
+  let src = null;
+  Object.assign(feed, { loaded: false, connected: false });
+  feed.open = () => {
+    src = new EventSource(`/api/events?run=${id}`);
+    feed.connected = true;
+    src.onmessage = (m) => {
+      const { at, items } = JSON.parse(m.data);
+      if (at === null) {
+        el.replaceChildren();
+        tools.clear();
+        Object.assign(feed, { plan: [], lastAction: '', quota: null, recent: [], loaded: true });
+      }
+      for (const it of items) add(it, at);
+      if (at === null) { el.scrollTop = el.scrollHeight; syncStreams(); }
+    };
+  };
+  feed.close = (live) => {
+    if (!src) return;
+    src.close();
+    src = null;
+    feed.connected = false;
+    // a live run keeps growing, so its feed has to load again next time
+    if (live) feed.loaded = false;
   };
   return feed;
+}
+
+// Browsers allow six connections per host, so only shown runs get a stream: live ones keep it,
+// finished ones load their transcript one after the other and close the stream again
+const isLive = (e) => e.state?.live ?? e.meta.live;
+function shown(e) {
+  if (current === 'apps' || current === 'agents') return showSmoke || !e.meta.smoke;
+  return current === `team/${e.id}`;
+}
+function syncStreams() {
+  const all = [...runs.values()];
+  for (const e of all) if (!(shown(e) && (isLive(e) || !e.feed.loaded))) e.feed.close(isLive(e));
+  let loading = all.some((e) => e.feed.connected && !isLive(e));
+  for (const e of all) {
+    if (!shown(e) || e.feed.connected) continue;
+    if (isLive(e)) e.feed.open();
+    else if (!e.feed.loaded && !loading) { e.feed.open(); loading = true; }
+  }
 }
 
 /* ---------- shared pieces ---------- */
@@ -438,6 +481,7 @@ function route() {
     else if (hash.startsWith('team/')) screenTeam(root, hash.slice(5));
     renderTeams();
   }
+  syncStreams();
 }
 window.addEventListener('hashchange', route);
 window.addEventListener('resize', () => fitIframes());

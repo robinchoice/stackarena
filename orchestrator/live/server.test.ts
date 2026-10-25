@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-async function withState(check: (dir: string, state: () => Promise<any>) => Promise<void>) {
+async function withState(check: (dir: string, state: () => Promise<any>, get: (path: string) => Promise<Response>) => Promise<void>) {
   const root = mkdtempSync(join(tmpdir(), 'stackarena-live-test-'));
   const dir = `${root}/results/runs/backend-bun-1`;
   mkdirSync(`${root}/orchestrator/live`, { recursive: true });
@@ -26,7 +26,8 @@ async function withState(check: (dir: string, state: () => Promise<any>) => Prom
     }) as unknown as typeof Bun.serve;
     await import(`${root}/orchestrator/live/server.ts`);
     Bun.serve = serve;
-    await check(dir, async () => (await fetchState(new Request('http://fixture/api/state?run=backend-bun-1'))).json());
+    const get = (path: string) => fetchState(new Request(`http://fixture${path}`));
+    await check(dir, async () => (await get('/api/state?run=backend-bun-1')).json(), get);
   } finally {
     Bun.serve = serve;
     process.env.PATH = path;
@@ -57,5 +58,13 @@ test('nested session changes invalidate usage and the cost curve', async () => {
     const after = await state();
     expect(after.usd).toBe(2);
     expect(after.series.at(-1).usd).toBe(2);
+  });
+});
+
+test('the event stream opens with the transcript even when it is still empty', async () => {
+  await withState(async (_dir, _state, get) => {
+    const reader = (await get('/api/events?run=backend-bun-1')).body!.getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe('data: {"at":null,"items":[]}\n\n');
+    await reader.cancel();
   });
 });

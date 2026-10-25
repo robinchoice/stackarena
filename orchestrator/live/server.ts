@@ -257,14 +257,16 @@ function events(id: string) {
           busy = true;
           try {
             const size = statSync(file).size;
+            let batch: Item[] = [];
             if (size > offset) {
               const chunk = await Bun.file(file).slice(offset, size).text();
               offset = size;
               const lines = (rest + chunk).split('\n');
               rest = lines.pop() ?? '';
-              const batch = lines.flatMap(items);
-              if (batch.length) ctrl.enqueue(enc.encode(`data: ${JSON.stringify({ at: live ? Date.now() : null, items: batch })}\n\n`));
+              batch = lines.flatMap(items);
             }
+            // The first message always goes out, so the page knows the transcript has arrived
+            if (batch.length || !live) ctrl.enqueue(enc.encode(`data: ${JSON.stringify({ at: live ? Date.now() : null, items: batch })}\n\n`));
           } catch {
             // the stream was closed or the file is not there yet
           } finally {
