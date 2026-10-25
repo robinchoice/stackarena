@@ -4,6 +4,32 @@ import { assertValid } from '../lib/spec';
 import { SEED_DIR } from './env';
 import { UI, expect, onlyReal, test } from './fixtures';
 
+function csvRows(text: string): string[][] {
+  const rows: string[][] = [[]];
+  let cell = '';
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === '"') {
+      if (quoted && text[i + 1] === '"') { cell += '"'; i++; }
+      else quoted = !quoted;
+    } else if (!quoted && (char === ',' || char === '\n')) {
+      rows.at(-1)!.push(cell);
+      cell = '';
+      if (char === '\n') rows.push([]);
+    } else {
+      if (!quoted && char === '\r') throw new Error('CSV must use LF line endings');
+      cell += char;
+    }
+  }
+  expect(quoted, 'closed CSV field').toBe(false);
+  if (cell || rows.at(-1)!.length) rows.at(-1)!.push(cell);
+  else rows.pop();
+  return rows.map((row, index) => index === 0 ? row : row.map((cell, column) =>
+    cell && (column === 9 || column === 10) ? new Date(cell).toISOString() : cell,
+  ));
+}
+
 // These scenarios need a real client and backend. They are validated with the first team's build.
 test.beforeEach(onlyReal);
 
@@ -49,19 +75,26 @@ test('the JSON export holds every habit and check-in', async ({ ui, page, seed }
   expect(data).toMatchObject({ format: 'stackarena-habits', version: 1 });
   for (const h of data.habits) assertValid('Habit', h);
   for (const c of data.checkins) assertValid('CheckIn', c);
-  expect(data.habits.map((h: { id: string }) => h.id).sort()).toEqual(seed.habits.map((h) => h.id).sort());
-  expect(data.checkins.filter((c: { count: number }) => c.count > 0)).toHaveLength(seed.checkins.length);
+  const habits = (items: typeof seed.habits) => items.map((h) => ({
+    ...h, createdAt: Date.parse(h.createdAt), updatedAt: Date.parse(h.updatedAt),
+    archivedAt: h.archivedAt === null ? null : Date.parse(h.archivedAt),
+  })).sort((a, b) => a.id.localeCompare(b.id));
+  const checkins = (items: typeof seed.checkins) => items.filter((c) => c.count > 0).map((c) => ({
+    ...c, updatedAt: Date.parse(c.updatedAt),
+  })).sort((a, b) => a.habitId.localeCompare(b.habitId) || a.date.localeCompare(b.date));
+  expect(habits(data.habits)).toEqual(habits(seed.habits));
+  expect(checkins(data.checkins)).toEqual(checkins(seed.checkins));
 });
 
-test('the CSV export has one row per check-in', async ({ ui, page, seed }) => {
+test('the CSV export preserves every field', async ({ ui, page }) => {
   await ui.tap('nav.settings');
   const download = page.waitForEvent('download');
   await ui.tap('settings.export.csv');
   const file = await download;
   expect(file.suggestedFilename()).toMatch(/^habits-\d{4}-\d{2}-\d{2}\.csv$/);
-  const lines = readFileSync((await file.path())!, 'utf8').trimEnd().split('\n');
-  expect(lines[0]).toBe(readFileSync(`${SEED_DIR}export.csv`, 'utf8').split('\n')[0]);
-  expect(lines.length - 1).toBe(seed.checkins.length);
+  const actual = csvRows(readFileSync((await file.path())!, 'utf8'));
+  const expected = csvRows(readFileSync(`${SEED_DIR}export.csv`, 'utf8'));
+  expect(actual).toEqual(expected);
 });
 
 test('importing a CSV export restores its habits', async ({ ui, page }) => {
