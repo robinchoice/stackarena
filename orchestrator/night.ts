@@ -80,6 +80,7 @@ function start() {
   if (Bun.spawnSync(['systemctl', '--user', 'is-active', '--quiet', unit]).exitCode === 0) return true;
   Bun.spawnSync(['systemctl', '--user', 'reset-failed', unit]);
   const aborted = `${REPO}/results/aborted/${id}-${new Date().toISOString().slice(0, 19).replace(/[-:]/g, '')}`;
+  mkdirSync(`${REPO}/results/aborted`, { recursive: true });
   if (existsSync(`${REPO}/results/runs/${id}`)) renameSync(`${REPO}/results/runs/${id}`, aborted);
   if (existsSync(`${REPO}/runs/${id}`)) {
     mkdirSync(aborted, { recursive: true });
