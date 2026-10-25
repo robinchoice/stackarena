@@ -97,11 +97,15 @@ async function agent(name: string, a: Agent) {
   const started = new Date();
   const deadline = started.getTime() + a.minutes * 60_000;
   let timedOut = false;
+  let budgetExceeded = false;
+  const checkLimits = () => {
+    timedOut ||= Date.now() >= deadline;
+    budgetExceeded ||= usage(a.dir).usd >= a.budget;
+    return timedOut || budgetExceeded;
+  };
   const timer = setInterval(() => {
-    if (Date.now() < deadline) return;
-    timedOut = true;
-    Bun.spawnSync(['docker', 'stop', '-t', '30', container]);
-  }, 10_000);
+    if (checkLimits()) Bun.spawnSync(['docker', 'stop', '-t', '30', container]);
+  }, 2000);
   const start = (credentials: Record<string, string>, args: string[]) =>
     Bun.spawn(
       [
@@ -142,7 +146,7 @@ async function agent(name: string, a: Agent) {
       ['-p', a.prompt],
     );
     const failed = lastResult();
-    if (apiKey && !timedOut && failed?.is_error && failed.api_error_status && failed.session_id) {
+    if (apiKey && !checkLimits() && failed?.is_error && failed.api_error_status && failed.session_id) {
       billing = 'api+subscription';
       console.log(`${run} ${name}: API key failed with ${failed.api_error_status}, continuing on the subscription`);
       exitCode = await start({ CLAUDE_CODE_OAUTH_TOKEN: token! }, [
@@ -158,6 +162,7 @@ async function agent(name: string, a: Agent) {
   const ended = new Date();
   const result = lastResult();
   const used = usage(a.dir);
+  budgetExceeded ||= used.usd >= a.budget;
   return {
     started: started.toISOString(),
     ended: ended.toISOString(),
@@ -165,9 +170,11 @@ async function agent(name: string, a: Agent) {
     limitMinutes: a.minutes,
     budgetUsd: a.budget,
     timedOut,
+    budgetExceeded,
     exitCode,
     billing,
-    outcome: timedOut ? 'time_limit' : (result?.subtype ?? 'no_result'),
+    outcome: exitCode === 0 && result?.subtype === 'success' ? 'success'
+      : timedOut ? 'time_limit' : budgetExceeded ? 'budget_limit' : (result?.subtype ?? 'no_result'),
     error: result?.is_error ? String(result.result).slice(0, 200) : null,
     requests: used.requests,
     tokens: used.tokens,

@@ -16,7 +16,10 @@ Vertrag in `spec/cli.md`, Prüfung mit `harness/cli/` gegen die Regel-Referenz, 
 
 ## Checks
 
-Kein Test-Setup für den Orchestrator. Nach Änderungen an `run.ts` einen Smoke-Lauf:
+`bun test orchestrator/` prüft Fehlerpfade, Herkunftsrevision und Budget mit isolierten
+Prozess-Fixtures, ohne Docker oder Modellaufrufe. `cd harness && bun run verify` prüft
+Typen, Referenz-Backend und Mockup auf Desktop und Handy; echte Client-Szenarien bleiben dabei aus.
+Nach Änderungen an `run.ts` zusätzlich einen Smoke-Lauf:
 `bun orchestrator/run.ts --team backend/bun --run <n> --smoke`, nach Änderungen an `decompile.ts`
 oder `questions.ts` einen auf dem Mockup-Build: `bun orchestrator/decompile.ts --smoke --run <n>`
 (unter 1 min, 0,34 $, erwartet werden 6 von 6 Antworten). Nach Änderungen an `spec/` oder `harness/`:
@@ -32,6 +35,11 @@ nachziehen.
 `bun orchestrator/decompile.ts --run client-<slug>-1`, am besten als eigene User-Unit wie ein
 Wettbewerbslauf. Zwei Schritte, Abrechnung und Modell wie im Wettbewerb (`claude-opus-5-5`, Effort
 `high`), festes Budget je Agent: 30 min / 5 $ für das Packen, 45 min / 5 $ für jede Analyse.
+Der kumulierte Listenpreis umfasst API und Abo einschließlich Rückfall. Der Host prüft ihn
+alle zwei Sekunden anhand der Session-Logs und stoppt den Container bei Erreichen des Budgets;
+eine bereits laufende Anfrage und verzögerte Nutzungsdaten können die Grenze überschreiten.
+`budgetExceeded` kennzeichnet das erreichte Budget; ein deshalb abgebrochener Lauf bekommt
+`outcome: "budget_limit"`. Ein bereits erfolgreich abgeschlossener Lauf behält `success`.
 
 1. Ein Agent mit Quelltext baut im Wettbewerbs-Image Web- und Linux-Ziel so, wie Nutzer sie bekommen
    (`orchestrator/pack.md`), und legt nur das Ausgelieferte nach `runs/<id>-decompile/out/<ziel>`.
