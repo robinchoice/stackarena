@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 PLAYWRIGHT_BROWSERS_PATH=/ms-pla
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential ca-certificates curl file git iptables iproute2 jq pkg-config unzip xz-utils \
       postgresql-client libssl-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
-      libxdo-dev xdg-utils \
+      libxdo-dev xdg-utils libgtk-4-dev libadwaita-1-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Node 22 for Claude Code and npm-based stacks, Bun for the harness and the Bun teams

@@ -10,12 +10,22 @@ Dazu die Info-Spalte „Decompilation“ für Client-Teams: `orchestrator/decomp
 ausgelieferte Build eines Teams ohne Quelltext auseinander und schreibt die Trefferquote nach
 `results/runs/<id>/decompilation.json`. Sie zählt nicht zur Bewertung.
 
+Ebenso die Info-Spalte „CLI“ für Teams mit einer CLI auf ihrem Core (bisher `client/rust-core`):
+Vertrag in `spec/cli.md`, Prüfung mit `harness/cli/` gegen die Regel-Referenz, Sync und Export:
+`cd harness && CLI=<repo des laufs>/clients/<slug>/cli.sh BASE_URL=<backend> bun test cli/`.
+
 ## Checks
 
 Kein Test-Setup für den Orchestrator. Nach Änderungen an `run.ts` einen Smoke-Lauf:
 `bun orchestrator/run.ts --team backend/bun --run <n> --smoke`, nach Änderungen an `decompile.ts`
 oder `questions.ts` einen auf dem Mockup-Build: `bun orchestrator/decompile.ts --smoke --run <n>`
-(unter 1 min, 0,34 $, erwartet werden 6 von 6 Antworten).
+(unter 1 min, 0,34 $, erwartet werden 6 von 6 Antworten). Nach Änderungen an `spec/` oder `harness/`:
+`cd harness && bun run verify` (prüft API- und CLI-Tests gegen die Referenzen in `harness/reference`
+und die UI-Szenarien gegen das Mockup).
+
+Nach Änderungen am `orchestrator/Dockerfile` das Image mit neuem Tag bauen
+(`docker build -t stackarena-run:<n> orchestrator`) und den Tag in `compose.yaml` und `decompile.ts`
+nachziehen.
 
 ## Decompilation-Spalte
 

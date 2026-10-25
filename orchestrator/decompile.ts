@@ -189,7 +189,7 @@ if (values.smoke) {
   mkdirSync(src, { recursive: true });
   sh(['bash', '-c', `git -C "${REPO}/runs/${run}" archive HEAD | tar -x -C "${src}"`]);
   const packRun = await agent('pack', {
-    image: 'stackarena-run:1',
+    image: 'stackarena-run:2',
     dir: `${outDir}/pack`,
     prompt: template('pack.md', {
       NAME: team.name,

@@ -15,7 +15,7 @@ Working conditions:
 - Change files only inside `{{FOLDER}}/`. `spec/` and `harness/` are read-only.
 - Your machine is a Linux container with 6 CPUs and 12 GB RAM, internet access for packages and
   documentation, no access to private networks and no Docker. Installed: Node 22, Bun, Rust
-  (rustup), Chromium for Playwright, the Postgres client and Tauri's Linux libraries. Install
-  anything else into your home directory or the team folder.
+  (rustup), Chromium for Playwright, the Postgres client, Tauri's Linux libraries and GTK 4 with
+  libadwaita. Install anything else into your home directory or the team folder.
 {{ENVIRONMENT}}
 - Stop when everything works and is committed, or when you cannot get any further.

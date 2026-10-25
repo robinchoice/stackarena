@@ -26,7 +26,7 @@ services:
       - ${REPO}/spec:/spec:ro
 
   agent:
-    image: stackarena-run:1
+    image: stackarena-run:2
     cap_add: [NET_ADMIN]
     sysctls:
       net.ipv6.conf.all.disable_ipv6: 1

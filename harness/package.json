@@ -9,7 +9,8 @@
     "test:contract": "api/contract.sh",
     "test:load": "load/run.sh",
     "test:e2e": "playwright test -c e2e/playwright.config.ts",
-    "verify": "bun run typecheck && api/with-reference.sh bun test api/ && bun run test:e2e"
+    "test:cli": "bun test cli/",
+    "verify": "bun run typecheck && api/with-reference.sh bun test api/ && CLI=reference/cli.sh api/with-reference.sh bun test cli/ && bun run test:e2e"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

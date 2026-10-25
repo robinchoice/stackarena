@@ -22,7 +22,7 @@ const { values } = parseArgs({
     smoke: { type: 'boolean', default: false },
   },
 });
-const teams: Record<string, { name: string; stack: string }> = JSON.parse(
+const teams: Record<string, { name: string; stack: string; notes?: string[] }> = JSON.parse(
   readFileSync(`${REPO}/orchestrator/teams.json`, 'utf8'),
 );
 const key = values.team ?? '';
@@ -64,9 +64,11 @@ sh(['git', 'commit', '-q', '-m', 'Contest start'], { cwd: runDir });
 const startCommit = sh(['git', 'rev-parse', 'HEAD'], { cwd: runDir });
 
 const environment =
-  kind === 'backend'
+  (kind === 'backend'
     ? '- Postgres is running and `DATABASE_URL` is set. Check your server with\n  `cd harness && bun install && BASE_URL=http://localhost:8080 bun test api/`.'
-    : '- A reference backend that implements `openapi.yaml` runs at `http://api:18080`\n  (`STACKARENA_API_URL`). Check your web build with `cd harness && bun install &&\n  TARGET=web CLIENT_URL=http://localhost:5173 BASE_URL=http://api:18080 bunx playwright test`.\n- This container builds and tests the web and Linux targets only. Set the other targets up so\n  they build on matching machines, and record their state in `STATUS.md`.';
+    : '- A reference backend that implements `openapi.yaml` runs at `http://api:18080`\n  (`STACKARENA_API_URL`). Check your web build with `cd harness && bun install &&\n  TARGET=web CLIENT_URL=http://localhost:5173 BASE_URL=http://api:18080 bunx playwright test`.\n- This container builds and tests the web and Linux targets only. Set the other targets up so\n  they build on matching machines, and record their state in `STATUS.md`.') +
+  // Team-specific conditions, one bullet each
+  (team.notes ?? []).map((note) => `\n- ${note}`).join('');
 const prompt = values.smoke
   ? `Smoke test of the contest setup. In /work create \`${folder}/STATUS.md\` containing the word smoke and commit it. Then run \`cd harness && bun install\` and \`node --version\`. Report the outcome in one sentence and stop.`
   : readFileSync(`${REPO}/orchestrator/prompt.md`, 'utf8')

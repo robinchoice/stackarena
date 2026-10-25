@@ -49,6 +49,7 @@ platform feature.
 - `serve-web.sh` builds the web target and serves it on port 5173 in the foreground.
 - Build setup for all seven targets.
 - `STATUS.md` lists per target what builds, what runs and what was verified.
+- A team whose stack includes a CLI follows `cli.md`.
 
 ## Checks
 

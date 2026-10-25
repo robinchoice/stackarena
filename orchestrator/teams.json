@@ -6,6 +6,15 @@
   "client/rust": { "name": "Rust", "stack": "Dioxus 0.7 for web, desktop and mobile (Rust)" },
   "client/go": { "name": "Go", "stack": "Fyne 2.8, web through WebAssembly (Go)" },
   "client/python": { "name": "Python", "stack": "Flet 1.0 (Python)" },
+  "client/rust-core": {
+    "name": "Rust-Core",
+    "stack": "a shared Rust core and native UIs: SwiftUI for iOS and macOS, Jetpack Compose for Android, WinUI 3 (C#) for Windows, GTK 4 with libadwaita in Rust for Linux, and a web UI using the core compiled to WebAssembly",
+    "notes": [
+      "All business logic lives in the Rust core: the rules from `spec/rules.md`, local storage, sync and\n  access to `spec/openapi.yaml`. The UIs render its state and pass user actions to it through FFI or\n  WebAssembly. Look for existing open source building blocks (for example Crux or UniFFI) before\n  you build your own bridge.",
+      "Build a CLI directly on the core as described in `spec/cli.md` and check it with\n  `cd harness && CLI=$PWD/../clients/rust-core/cli.sh BASE_URL=http://api:18080 bun test cli/`.",
+      "Work in this order: core and CLI, web, Linux, then the other UIs."
+    ]
+  },
   "backend/bun": { "name": "Bun", "stack": "Bun, Hono and Drizzle ORM (TypeScript)" },
   "backend/deno": { "name": "Deno", "stack": "Deno, Hono and Drizzle ORM (TypeScript)" },
   "backend/go": { "name": "Go", "stack": "Go net/http with sqlc" },
