@@ -82,7 +82,7 @@ export class Rules {
 
   doneDaysInWeek(h: Habit, mon: number, except?: number): number {
     let n = 0;
-    for (let d = mon; d < mon + 7 && d <= this.today; d++) if (d !== except && this.isDone(h, d)) n++;
+    for (let d = Math.max(mon, this.firstDay(h)); d < mon + 7 && d <= this.today; d++) if (d !== except && this.isDone(h, d)) n++;
     return n;
   }
 
