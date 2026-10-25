@@ -77,6 +77,8 @@ export async function pullAll(token: string, deviceId = 'puller') {
   for (;;) {
     const res = await sync(token, { deviceId, cursor });
     if (res.status !== 200) throw new Error(`sync failed: ${res.status}`);
+    if (res.body.habits.length + res.body.checkins.length > 5000)
+      throw new Error('sync response exceeds 5000 records');
     habits.push(...res.body.habits);
     checkins.push(...res.body.checkins);
     cursor = res.body.cursor;

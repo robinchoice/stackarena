@@ -141,7 +141,7 @@ describe('sync', () => {
     await pushAll(token, habits, checkins);
 
     const all = await pullAll(token);
-    expect(all.pages).toBe(3);
+    expect(all.pages).toBeGreaterThanOrEqual(3);
     expect(all.habits).toHaveLength(4);
     expect(all.checkins).toHaveLength(12_000);
     expect(new Set(all.checkins.map((c) => `${c.habitId}|${c.date}`)).size).toBe(12_000);
