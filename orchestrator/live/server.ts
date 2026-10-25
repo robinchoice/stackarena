@@ -248,11 +248,14 @@ async function state(id: string) {
   };
 }
 
-// Sends every item of the transcript, then follows the file as it grows
-function events(id: string) {
-  const file = `${RESULTS}/${id}/transcript.jsonl`;
-  let offset = 0;
-  let rest = '';
+// One stream for many runs (?runs=<id>:<byte offset>,…): sends each transcript from its offset,
+// then follows the files as they grow. `to` is the offset after the last complete line, so the
+// page can reconnect with it instead of loading everything again
+function events(spec: string) {
+  const feeds = spec.split(',').map((part) => {
+    const [id = '', from = '0'] = part.split(':');
+    return { id, offset: Number(from) || 0, file: `${RESULTS}/${id}/transcript.jsonl` };
+  }).filter((f) => ID.test(f.id) && existsSync(f.file));
   let timer: ReturnType<typeof setInterval>;
   return new Response(
     new ReadableStream({
@@ -263,19 +266,18 @@ function events(id: string) {
           if (busy) return;
           busy = true;
           try {
-            const size = statSync(file).size;
-            let batch: Item[] = [];
-            if (size > offset) {
-              const chunk = await Bun.file(file).slice(offset, size).text();
-              offset = size;
-              const lines = (rest + chunk).split('\n');
-              rest = lines.pop() ?? '';
-              batch = lines.flatMap(items);
+            for (const f of feeds) {
+              const from = f.offset;
+              const bytes = new Uint8Array(await Bun.file(f.file).slice(from).arrayBuffer());
+              const end = bytes.lastIndexOf(10) + 1;
+              f.offset += end;
+              const batch = new TextDecoder().decode(bytes.subarray(0, end)).split('\n').flatMap(items);
+              // The first message of each run always goes out, so the page knows it has caught up
+              if (batch.length || !live)
+                ctrl.enqueue(enc.encode(`data: ${JSON.stringify({ run: f.id, at: live ? Date.now() : null, from, to: f.offset, items: batch })}\n\n`));
             }
-            // The first message always goes out, so the page knows the transcript has arrived
-            if (batch.length || !live) ctrl.enqueue(enc.encode(`data: ${JSON.stringify({ at: live ? Date.now() : null, items: batch })}\n\n`));
           } catch {
-            // the stream was closed or the file is not there yet
+            // the stream was closed
           } finally {
             busy = false;
           }
@@ -303,9 +305,9 @@ const server = Bun.serve({
     if (/^\/fonts\/bricolage-grotesque-latin(-ext)?\.woff2$/.test(url.pathname))
       return new Response(Bun.file(`${REPO}/spec/mockup/${url.pathname.slice(7)}`));
     if (url.pathname === '/api/runs') return Response.json(await listRuns());
+    if (url.pathname === '/api/events') return events(url.searchParams.get('runs') ?? '');
     if (!ID.test(id) || !existsSync(`${RESULTS}/${id}/transcript.jsonl`)) return new Response('unknown run', { status: 404 });
     if (url.pathname === '/api/state') return Response.json(await state(id));
-    if (url.pathname === '/api/events') return events(id);
     return new Response('not found', { status: 404 });
   },
 });

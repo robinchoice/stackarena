@@ -273,50 +273,50 @@ function makeFeed(id) {
     if (node) el.appendChild(node);
     if (stick) el.scrollTop = el.scrollHeight;
   }
-  // Every (re)connect starts with the whole transcript (at: null), so the feed is rebuilt from it
-  let src = null;
-  Object.assign(feed, { loaded: false, connected: false });
-  feed.open = () => {
-    src = new EventSource(`/api/events?run=${id}`);
-    feed.connected = true;
-    src.onmessage = (m) => {
-      const { at, items } = JSON.parse(m.data);
-      if (at === null) {
-        el.replaceChildren();
-        tools.clear();
-        Object.assign(feed, { plan: [], lastAction: '', quota: null, recent: [], loaded: true });
-      }
-      for (const it of items) add(it, at);
-      if (at === null) { el.scrollTop = el.scrollHeight; syncStreams(); }
-    };
-  };
-  feed.close = (live) => {
-    if (!src) return;
-    src.close();
-    src = null;
-    feed.connected = false;
-    // a live run keeps growing, so its feed has to load again next time
-    if (live) feed.loaded = false;
+  // A message from offset 0 carries the whole transcript, so the feed starts over with it
+  Object.assign(feed, { offset: 0, loaded: false });
+  feed.apply = ({ at, from, to, items }) => {
+    if (from === 0) {
+      el.replaceChildren();
+      tools.clear();
+      Object.assign(feed, { plan: [], lastAction: '', quota: null, recent: [] });
+    }
+    for (const it of items) add(it, at);
+    feed.offset = to;
+    if (at === null) { feed.loaded = true; el.scrollTop = el.scrollHeight; }
   };
   return feed;
 }
 
-// Browsers allow six connections per host, so only shown runs get a stream: live ones keep it,
-// finished ones load their transcript one after the other and close the stream again
+// One stream for all feeds, as browsers allow only six connections per host. It covers the shown
+// runs that are live or not loaded yet, and starts again with the byte offset of each feed
+// whenever a run joins; finished runs simply stay quiet until then
 const isLive = (e) => e.state?.live ?? e.meta.live;
 function shown(e) {
   if (current === 'apps' || current === 'agents') return showSmoke || !e.meta.smoke;
   return current === `team/${e.id}`;
 }
+let stream = null;
+let streamRuns = new Set();
 function syncStreams() {
-  const all = [...runs.values()];
-  for (const e of all) if (!(shown(e) && (isLive(e) || !e.feed.loaded))) e.feed.close(isLive(e));
-  let loading = all.some((e) => e.feed.connected && !isLive(e));
-  for (const e of all) {
-    if (!shown(e) || e.feed.connected) continue;
-    if (isLive(e)) e.feed.open();
-    else if (!e.feed.loaded && !loading) { e.feed.open(); loading = true; }
-  }
+  const wanted = [...runs.values()].filter((e) => shown(e) && (isLive(e) || !e.feed.loaded));
+  if (wanted.length ? wanted.every((e) => streamRuns.has(e.id)) : !stream) return;
+  stream?.close();
+  stream = null;
+  streamRuns = new Set(wanted.map((e) => e.id));
+  if (!wanted.length) return;
+  stream = new EventSource(`/api/events?runs=${wanted.map((e) => `${e.id}:${e.feed.offset}`).join(',')}`);
+  stream.onmessage = (m) => {
+    const msg = JSON.parse(m.data);
+    runs.get(msg.run)?.feed.apply(msg);
+  };
+  // The browser would reconnect with the old offsets, so the page does it itself
+  stream.onerror = () => {
+    stream.close();
+    stream = null;
+    streamRuns = new Set();
+    setTimeout(syncStreams, 3000);
+  };
 }
 
 /* ---------- shared pieces ---------- */

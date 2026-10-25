@@ -61,10 +61,26 @@ test('nested session changes invalidate usage and the cost curve', async () => {
   });
 });
 
-test('the event stream opens with the transcript even when it is still empty', async () => {
+const text = (t: string) => JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: t }] } }) + '\n';
+async function firstMessage(get: (path: string) => Promise<Response>, runs: string) {
+  const reader = (await get(`/api/events?runs=${runs}`)).body!.getReader();
+  const chunk = new TextDecoder().decode((await reader.read()).value);
+  await reader.cancel();
+  return chunk.split('\n\n').filter(Boolean).map((m) => JSON.parse(m.slice('data: '.length)));
+}
+
+test('the event stream opens with each transcript even when it is still empty', async () => {
   await withState(async (_dir, _state, get) => {
-    const reader = (await get('/api/events?run=backend-bun-1')).body!.getReader();
-    expect(new TextDecoder().decode((await reader.read()).value)).toBe('data: {"at":null,"items":[]}\n\n');
-    await reader.cancel();
+    expect(await firstMessage(get, 'backend-bun-1:0,backend-none-1:0')).toEqual([{ run: 'backend-bun-1', at: null, from: 0, to: 0, items: [] }]);
+  });
+});
+
+test('the event stream resumes at the offset and leaves an unfinished line for later', async () => {
+  await withState(async (dir, _state, get) => {
+    writeFileSync(`${dir}/transcript.jsonl`, text('first ä') + text('second') + '{"type":"assis');
+    const offset = Buffer.byteLength(text('first ä'));
+    expect(await firstMessage(get, `backend-bun-1:${offset}`)).toEqual([
+      { run: 'backend-bun-1', at: null, from: offset, to: offset + Buffer.byteLength(text('second')), items: [{ k: 'text', text: 'second' }] },
+    ]);
   });
 });
