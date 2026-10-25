@@ -109,10 +109,11 @@ function testRuns(dir: string): Tests[] {
           const bun = /^\s*(\d+) pass\s*$[\s\S]*?^\s*(\d+) fail\s*$/m.exec(t);
           // Playwright's summary line, e.g. "  34 passed (12.3s)"; Schemathesis also prints "805 passed"
           const pw = /^\s*(\d+) passed \(/m.exec(t);
-          if (!bun && !pw) continue;
+          const pwFailed = /^\s*(\d+) failed\s*$/m.exec(t);
+          if (!bun && !pw && !pwFailed) continue;
           const cases = [...t.matchAll(/^\((pass|fail)\) (.+?)(?: \[[\d.]+m?s\])?$/gm)].map((m) => ({ name: m[2]!, ok: m[1] === 'pass' }));
           for (const m of t.matchAll(/^\s*([✓✘×])\s+\d+\s+(.+?)(?: \(\d.*\))?$/gm)) cases.push({ name: m[2]!, ok: m[1] === '✓' });
-          const pass = bun ? +bun[1]! : +pw![1]!;
+          const pass = bun ? +bun[1]! : +(pw?.[1] ?? 0);
           const fail = bun ? +bun[2]! : +(/(\d+) failed/.exec(t)?.[1] ?? 0);
           runs.push({ suite: bun ? 'API' : 'Web', pass, fail, cases, at: e.timestamp ?? null, count: runs.length + 1 });
         }
