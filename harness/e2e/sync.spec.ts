@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { pullAll } from '../api/client';
 import { assertValid } from '../lib/spec';
 import { SEED_DIR } from './env';
-import { UI, expect, onlyReal, test } from './fixtures';
+import { type Expected, type Seed, UI, expect, onlyReal, test } from './fixtures';
 
 function csvRows(text: string): string[][] {
   const rows: string[][] = [[]];
@@ -30,11 +30,17 @@ function csvRows(text: string): string[][] {
   ));
 }
 
+// A habit with the check button (targetPerDay 1) that is due today and not done yet
+const checkable = (seed: Seed, expected: Expected) =>
+  Object.entries(expected.habits).find(
+    ([id, h]) => h.dueToday && !h.doneToday && seed.habits.find((s) => s.id === id)!.targetPerDay === 1,
+  )![0];
+
 // These scenarios need a real client and backend. They are validated with the first team's build.
 test.beforeEach(onlyReal);
 
-test('a check-in made offline reaches the server after reconnecting', async ({ ui, page, user, expected }) => {
-  const [id] = Object.entries(expected.habits).find(([, h]) => h.dueToday && !h.doneToday)!;
+test('a check-in made offline reaches the server after reconnecting', async ({ ui, page, user, expected, seed }) => {
+  const id = checkable(seed, expected);
   const check = `today.habit.${id}.check`;
   const onServer = async () =>
     (await pullAll(user!.token)).checkins.find((c) => c.habitId === id && c.date === expected.today)?.count ?? 0;
@@ -48,8 +54,8 @@ test('a check-in made offline reaches the server after reconnecting', async ({ u
   await expect.poll(onServer, { timeout: 30_000 }).toBe(1);
 });
 
-test('a second device sees a check-in after syncing', async ({ ui, browser, user, expected }) => {
-  const [id] = Object.entries(expected.habits).find(([, h]) => h.dueToday && !h.doneToday)!;
+test('a second device sees a check-in after syncing', async ({ ui, browser, user, expected, seed }) => {
+  const id = checkable(seed, expected);
   await ui.tap(`today.habit.${id}.check`);
   await ui.tap('sync.status');
 
