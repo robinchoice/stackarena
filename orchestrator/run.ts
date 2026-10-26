@@ -6,6 +6,7 @@
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { parseArgs } from 'node:util';
+import { grade } from './grade';
 import { usage } from './usage';
 
 const REPO = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
@@ -190,4 +191,12 @@ const summary = {
   changedOutsideFolder: changed.filter((f) => !f.startsWith(`${folder}/`)),
 };
 writeFileSync(`${outDir}/summary.json`, `${JSON.stringify(summary, null, 2)}\n`);
-console.log(JSON.stringify(summary, null, 2));
+
+// The summary stands before grading, so a failed grading never loses the run
+console.log(`${id}: grading`);
+const graded = await grade({ repo: REPO, id, team: key, runDir, outDir, sourceCommit, finalCommit }).catch((e: Error) => ({
+  error: e.message, score: 0,
+}));
+const final = { ...summary, score: graded.score, grade: graded };
+writeFileSync(`${outDir}/summary.json`, `${JSON.stringify(final, null, 2)}\n`);
+console.log(JSON.stringify(final, null, 2));

@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -12,7 +12,7 @@ function fixture(mode: string, api = false) {
   mkdirSync(`${root}/orchestrator`, { recursive: true });
   mkdirSync(`${root}/bin`);
   mkdirSync(`${root}/dev`);
-  for (const file of ['run.ts', 'night.ts', 'decompile.ts', 'usage.ts', 'questions.ts', 'teams.json', 'prompt.md', 'pack.md', 'decompile.md']) {
+  for (const file of ['run.ts', 'grade.ts', 'night.ts', 'decompile.ts', 'usage.ts', 'questions.ts', 'teams.json', 'prompt.md', 'pack.md', 'decompile.md']) {
     const source = readFileSync(new URL(file, import.meta.url), 'utf8');
     writeFileSync(`${root}/orchestrator/${file}`, source.replace("from 'node:os'", "from '../os.ts'"));
   }
@@ -69,6 +69,20 @@ if (action === 'stop' || action === 'rm') {
 if (action !== 'run') process.exit(0);
 const name = args[args.indexOf('--name') + 1];
 writeFileSync(root + '/' + name + '.pid', String(process.pid));
+if (name.endsWith('-grade-agent')) {
+  const logs = process.env.RUN_DIR + '/grade-logs';
+  mkdirSync(logs, { recursive: true });
+  writeFileSync(root + '/grade-credentials', String(!!(process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_CODE_OAUTH_TOKEN)));
+  if (mode === 'grade-client') {
+    mkdirSync(process.env.RUN_DIR + '/results', { recursive: true });
+    writeFileSync(process.env.RUN_DIR + '/results/e2e.json', JSON.stringify({ stats: { expected: 19, flaky: 1, unexpected: 4, skipped: 3 } }));
+    writeFileSync(logs + '/cli.log', ' 12 pass\\n 1 fail\\n');
+    process.exit(0);
+  }
+  if (mode === 'grade-no-start') writeFileSync(logs + '/error', 'no start.sh\\n');
+  else writeFileSync(logs + '/tests.log', '(pass) a\\n 30 pass\\n 2 fail\\n 1 skip\\n');
+  process.exit(0);
+}
 const mounts = args.flatMap((x, i) => x === '-v' ? [args[i + 1]] : []);
 const out = mounts.find(x => x.endsWith(':/out'))?.slice(0, -5);
 const session = mounts.find(x => x.endsWith(':/home/agent/.claude/projects/-work'))?.split(':')[0] ?? process.env.OUT_DIR + '/session';
@@ -144,6 +158,36 @@ test('the recorded source revision is the archived revision', () => {
   const summary = JSON.parse(readFileSync(`${f.root}/results/runs/smoke-backend-bun-1/summary.json`, 'utf8'));
   expect(summary.sourceCommit).toBe(readFileSync(`${f.root}/archived`, 'utf8'));
   expect(f.calls().at(-1)).toBe('down');
+});
+
+function graded(mode: string, team = 'backend/bun') {
+  const f = fixture(mode, true);
+  const result = f.run('run.ts', ['--team', team, '--smoke']);
+  expect(result.stderr.toString()).toBe('');
+  expect(result.exitCode).toBe(0);
+  const id = `smoke-${team.replace('/', '-')}-1`;
+  return { ...f, summary: JSON.parse(readFileSync(`${f.root}/results/runs/${id}/summary.json`, 'utf8')) };
+}
+
+test('a run is graded on a fresh setup without credentials', () => {
+  const f = graded('success');
+  expect(f.calls()).toEqual(['up', 'run', 'down', 'up', 'run', 'down']);
+  expect(readFileSync(`${f.root}/grade-credentials`, 'utf8')).toBe('false');
+  expect(f.summary.score).toBe(0.938);
+  expect(f.summary.grade).toMatchObject({ suite: 'api', passed: 30, failed: 2, skipped: 1, error: null, harnessCommit: f.summary.sourceCommit });
+  expect(existsSync(`${f.root}/runs/smoke-backend-bun-1-grade`)).toBe(false);
+});
+
+test('a client is scored by its web E2E run, its CLI only as info', () => {
+  const f = graded('grade-client', 'client/rust-core');
+  expect(f.summary.score).toBe(0.833);
+  expect(f.summary.grade).toMatchObject({ suite: 'e2e', passed: 20, failed: 4, skipped: 3, error: null, cli: { passed: 12, failed: 1, skipped: 0 } });
+});
+
+test('a team that cannot be started scores zero with the reason', () => {
+  const f = graded('grade-no-start');
+  expect(f.summary.score).toBe(0);
+  expect(f.summary.grade).toMatchObject({ passed: 0, failed: 0, error: 'no start.sh' });
 });
 
 function decompile(mode: string, api = false) {

@@ -5,6 +5,15 @@
 Wettbewerb: Agents bauen denselben Habit-Tracker (`spec/`) auf verschiedenen Stacks
 (`orchestrator/teams.json`), jeder Lauf in einem abgeschotteten Container. Ergebnisse liegen in
 `results/runs/<id>/summary.json`, die Repos der Teams in `runs/<id>/` (beides gitignoriert).
+Öffentliche Beschreibung und Ergebnistabelle für technische Leser: `README.md` (englisch), Lizenz MIT.
+
+Bewertung: Nach jedem Lauf bewertet `orchestrator/grade.ts` unabhängig vom Agenten, mit dem letzten
+Commit des Teams, unverändertem `spec/` und `harness/` der Quellrevision, frischer Datenbank bzw.
+Referenz-API und ohne Zugangsdaten. Backends gegen `bun test api/` (`start.sh`), Clients gegen die
+Web-E2E-Suite (`serve-web.sh`), eine vorhandene `cli.sh` als Info. `score` in `summary.json` ist
+bestanden / (bestanden + fehlgeschlagen), Details unter `grade`, Logs in `results/runs/<id>/grade/`.
+Einen fertigen Lauf neu bewerten: `bun orchestrator/grade.ts --run <id>` (überschreibt `score` und
+`grade`).
 
 Dazu die Info-Spalte „Decompilation“ für Client-Teams: `orchestrator/decompile.ts` nimmt das
 ausgelieferte Build eines Teams ohne Quelltext auseinander und schreibt die Trefferquote nach
@@ -20,7 +29,9 @@ Vertrag in `spec/cli.md`, Prüfung mit `harness/cli/` gegen die Regel-Referenz, 
 Prozess-Fixtures, ohne Docker oder Modellaufrufe. `cd harness && bun run verify` prüft
 Typen, Referenz-Backend und Mockup auf Desktop und Handy; echte Client-Szenarien bleiben dabei aus.
 Nach Änderungen an `run.ts` zusätzlich einen Smoke-Lauf:
-`bun orchestrator/run.ts --team backend/bun --run <n> --smoke`, nach Änderungen an `decompile.ts`
+`bun orchestrator/run.ts --team backend/bun --run <n> --smoke` (bewertet sich mit `score` 0 und
+`error: "no start.sh"`), nach Änderungen an `grade.ts` zusätzlich eine echte Neubewertung,
+etwa `bun orchestrator/grade.ts --run backend-go-1` (gut 2 min). Nach Änderungen an `decompile.ts`
 oder `questions.ts` einen auf dem Mockup-Build: `bun orchestrator/decompile.ts --smoke --run <n>`
 (unter 1 min, 0,34 $, erwartet werden 6 von 6 Antworten). Nach Änderungen an `spec/` oder `harness/`:
 `cd harness && bun run verify` (prüft API- und CLI-Tests gegen die Referenzen in `harness/reference`
@@ -86,6 +97,9 @@ laufender Lauf: `journalctl --user -fu stackarena-<id>`.
 - `run.ts` liest den Stand von `HEAD` (`git archive`), uncommittete Änderungen an `spec/` und
   `harness/` gehen nicht in den Lauf. Nur die Referenz-API der Client-Läufe startet aus dem
   Arbeitsbaum (`compose.yaml` bindet `harness/` und `spec/` ein).
+- Die Bewertung läuft nach dem Agenten in derselben Unit, höchstens 60 min (Installieren, Bauen,
+  Tests; die Backends brauchten 1–5 min). Sie nutzt kein Modell, ein Nachtlauf belegt das Abo also
+  nicht länger. Arbeitskopie `runs/<id>-grade` wird danach gelöscht.
 - Ein abgebrochener Lauf blockiert seine ID: `runs/<id>` und `results/runs/<id>` nach
   `results/aborted/` verschieben, bevor er neu startet. Genauso blockiert eine fertige Analyse ihre
   ID über `runs/<id>-decompile`.
