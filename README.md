@@ -79,14 +79,14 @@ These are shown next to the contest and do not count towards it.
 Completed contest runs so far, taken from `results/runs/*/summary.json` (the directory itself is
 not checked in). Model `claude-opus-5-5` with effort `xhigh` in every run.
 
-| Team | Stack | Run | Started (UTC) | Minutes / limit | Outcome | List price | Billing | Requests | Commits | Spec revision |
-|---|---|---|---|---|---|---|---|---|---|---|
-| backend/bun | Bun, Hono, Drizzle ORM | `backend-bun-1` | 2026-10-07 09:41 | 88.8 / 240 | success | $25.57 | not recorded | 323 | 28 | [`2686316`](https://github.com/robinchoice/stackarena/commit/2686316dd7c76251fcd02446c4e1020dcfa56b62) |
-| backend/deno | Deno, Hono, Drizzle ORM | `backend-deno-1` | 2026-10-17 22:45 | 98.0 / 240 | success | $19.50 | api | 251 | 22 | [`382fa60`](https://github.com/robinchoice/stackarena/commit/382fa60a1e649fc64223e51d74ffd8388e61a9aa) |
-| backend/go | Go net/http, sqlc | `backend-go-1` | 2026-10-21 23:45 | 61.0 / 180 | success | $13.60 | api+subscription | 172 | 18 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
-| backend/rust | Axum, sqlx | `backend-rust-1` | 2026-10-22 23:30 | 84.9 / 195 | success | $18.23 | api+subscription | 236 | 17 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
-| backend/dart | Dart Frog | `backend-dart-1` | 2026-10-23 23:30 | 88.7 / 195 | success | $19.55 | api+subscription | 286 | 18 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
-| backend/python | FastAPI, async SQLAlchemy | `backend-python-1` | 2026-10-24 23:30 | 85.8 / 195 | success | $19.15 | api+subscription | 260 | 19 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
+| Run | Stack | Started (UTC) | Minutes / limit | Outcome | List price | Billing | Commits | Spec |
+|---|---|---|---|---|---|---|---|---|
+| `backend-bun-1` | Bun, Hono, Drizzle ORM | 2026-10-07 09:41 | 88.8 / 240 | success | $25.57 | not recorded | 28 | [`2686316`](https://github.com/robinchoice/stackarena/commit/2686316dd7c76251fcd02446c4e1020dcfa56b62) |
+| `backend-deno-1` | Deno, Hono, Drizzle ORM | 2026-10-17 22:45 | 98.0 / 240 | success | $19.50 | api | 22 | [`382fa60`](https://github.com/robinchoice/stackarena/commit/382fa60a1e649fc64223e51d74ffd8388e61a9aa) |
+| `backend-go-1` | Go net/http, sqlc | 2026-10-21 23:45 | 61.0 / 180 | success | $13.60 | api+subscription | 18 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
+| `backend-rust-1` | Axum, sqlx | 2026-10-22 23:30 | 84.9 / 195 | success | $18.23 | api+subscription | 17 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
+| `backend-dart-1` | Dart Frog | 2026-10-23 23:30 | 88.7 / 195 | success | $19.55 | api+subscription | 18 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
+| `backend-python-1` | FastAPI, async SQLAlchemy | 2026-10-24 23:30 | 85.8 / 195 | success | $19.15 | api+subscription | 19 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
 
 - **Outcome** is how the agent's session ended: `success` means the agent finished on its own
   within the limit, not that the result passes the harness. An independent harness score after the
@@ -94,6 +94,7 @@ not checked in). Model `claude-opus-5-5` with effort `xhigh` in every run.
 - **List price** is the cumulative list price of all requests, priced from the session logs.
   `api` runs drew on prepaid API credits; `api+subscription` runs used up the credits and continued
   in the same session on a subscription, so the list price covers both parts.
+- **Spec** is the revision of this repository whose `spec/` and `harness/` the run started from.
 - No client team has run yet. The eight smoke runs of the setup (under 2 minutes and $0.20 each)
   and three decompilation smoke runs on the mockup build (6 of 6 answers, $0.33–0.35 each) are left
   out.
