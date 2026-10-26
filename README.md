@@ -8,7 +8,7 @@ against the same harness, and every run is recorded the same way: outcome, time,
 ## How a run works
 
 ```mermaid
-flowchart LR
+flowchart TD
     spec["spec/<br/>features, OpenAPI, rules,<br/>export format, mockup"]
     teams["orchestrator/teams.json<br/>one team per stack"]
     timer["systemd timer<br/>stackarena-night.timer"]
