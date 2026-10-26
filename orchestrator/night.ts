@@ -38,12 +38,16 @@ if (sh(['docker', 'ps', '-q', '--filter', 'name=stackarena-'])) skip('contest co
 
 // Only sessions with someone at work hold a run back. The Savor workflows run every night and plan
 // their own share of the subscription; Savor marks a workflow thread with `workflow` and the threads
-// it starts with `unattended`. Sessions without such a thread, terminal sessions included, count.
+// it starts with `unattended`. A thread whose last input from a person (`inputAt`) is older than the
+// quiet time counts as unattended too, for example an agent told to work through the night.
+// Sessions without such a thread, terminal sessions included, count.
+const quietSince = now.getTime() - QUIET_MINUTES * 60_000;
 const unattended = new Set<string>();
 for (const file of new Bun.Glob('*/.savor/threads/*/thread.json').scanSync(`${homedir()}/dev`)) {
   try {
     const thread = JSON.parse(readFileSync(`${homedir()}/dev/${file}`, 'utf8'));
-    if (thread.workflow || thread.unattended) for (const s of thread.agentSessions ?? []) unattended.add(s.sessionId);
+    if (thread.workflow || thread.unattended || Date.parse(thread.inputAt) < quietSince)
+      for (const s of thread.agentSessions ?? []) unattended.add(s.sessionId);
   } catch {} // a thread Savor is writing right now: its sessions count
 }
 const sessions = [`${homedir()}/.claude/projects`, `${homedir()}/.codex/sessions`].filter((d) => existsSync(d));

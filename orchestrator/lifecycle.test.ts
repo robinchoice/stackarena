@@ -114,6 +114,28 @@ test('the first failed night start is archived before its retry', () => {
   expect(result.stdout.toString()).toContain('started backend-bun-1');
 });
 
+function nightWithThread(inputAt: string) {
+  const f = fixture('night-retry');
+  const id = '70bc99ff-e461-4e48-984e-b161ab5a84c2';
+  mkdirSync(`${f.root}/.claude/projects/-home-dev-kontor`, { recursive: true });
+  writeFileSync(`${f.root}/.claude/projects/-home-dev-kontor/${id}.jsonl`, '{}\n');
+  mkdirSync(`${f.root}/dev/kontor/.savor/threads/t1`, { recursive: true });
+  writeFileSync(`${f.root}/dev/kontor/.savor/threads/t1/thread.json`, JSON.stringify({ inputAt, agentSessions: [{ provider: 'claude', sessionId: id }] }));
+  return f.run('night.ts', []);
+}
+
+test('a busy Savor thread without recent input does not hold the night run back', () => {
+  const result = nightWithThread('2026-10-25T00:30:00');
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).toContain('started backend-bun-1');
+});
+
+test('a busy Savor thread with recent input holds the night run back', () => {
+  const result = nightWithThread('2026-10-25T01:20:00');
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).toContain('no run: agent session active');
+});
+
 test('the recorded source revision is the archived revision', () => {
   const f = fixture('success');
   const result = f.run('run.ts', ['--team', 'backend/bun', '--smoke']);

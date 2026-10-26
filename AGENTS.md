@@ -79,8 +79,10 @@ laufender Lauf: `journalctl --user -fu stackarena-<id>`.
   und teilen sich das 5h-Limit mit ihm. Deshalb enden Nachtläufe spätestens um 05:00, und `night.ts`
   startet nur, wenn 20 Minuten lang keine Claude- oder Codex-Session aktiv war, die jemand begonnen
   hat. Sessions der Savor-Workflows zählen nicht, sie laufen fast die ganze Nacht: `night.ts` erkennt
-  sie an `workflow` oder `unattended` in `~/dev/*/.savor/threads/*/thread.json`. Ändert Savor dieses
-  Format, blockt jede Workflow-Session wieder den Start.
+  sie an `workflow` oder `unattended` in `~/dev/*/.savor/threads/*/thread.json`. Ebenso zählt ein
+  Savor-Thread nicht, dessen letzte Eingabe (`inputAt`) älter als 20 Minuten ist, etwa ein Agent mit
+  dem Auftrag, die Nacht durchzuarbeiten. Ändert Savor dieses Format, blockt jede Workflow-Session
+  wieder den Start.
 - `run.ts` liest den Stand von `HEAD` (`git archive`), uncommittete Änderungen an `spec/` und
   `harness/` gehen nicht in den Lauf. Nur die Referenz-API der Client-Läufe startet aus dem
   Arbeitsbaum (`compose.yaml` bindet `harness/` und `spec/` ein).
