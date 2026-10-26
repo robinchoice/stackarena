@@ -80,7 +80,17 @@ if (name.endsWith('-grade-agent')) {
     process.exit(0);
   }
   if (mode === 'grade-no-start') writeFileSync(logs + '/error', 'no start.sh\\n');
-  else writeFileSync(logs + '/tests.log', '(pass) a\\n 30 pass\\n 2 fail\\n 1 skip\\n');
+  else {
+    writeFileSync(logs + '/tests.log', '(pass) a\\n 30 pass\\n 2 fail\\n 1 skip\\n');
+    writeFileSync(logs + '/contract.json', JSON.stringify({ test_cases: { generated: 100, with_failures: 10, errored: 0, without_checks: 2, unique_failures: 3 }, errors: [] }));
+    if (mode === 'grade-tool-error') {
+      writeFileSync(logs + '/tool-error', 'k6 could not be installed\\n');
+      process.exit(0);
+    }
+    writeFileSync(logs + '/load.json', JSON.stringify({ metrics: {
+      checks: { passes: 990, fails: 10 }, http_reqs: { rate: 123.45 }, 'http_req_duration{name:login}': { 'p(95)': 12.34 },
+    } }));
+  }
   process.exit(0);
 }
 const mounts = args.flatMap((x, i) => x === '-v' ? [args[i + 1]] : []);
@@ -173,21 +183,35 @@ test('a run is graded on a fresh setup without credentials', () => {
   const f = graded('success');
   expect(f.calls()).toEqual(['up', 'run', 'down', 'up', 'run', 'down']);
   expect(readFileSync(`${f.root}/grade-credentials`, 'utf8')).toBe('false');
-  expect(f.summary.score).toBe(0.938);
-  expect(f.summary.grade).toMatchObject({ suite: 'api', passed: 30, failed: 2, skipped: 1, error: null, harnessCommit: f.summary.sourceCommit });
+  expect(f.summary.score).toBe(0.943);
+  expect(f.summary.grade).toMatchObject({ error: null, harnessCommit: f.summary.sourceCommit, parts: {
+    api: { passed: 30, failed: 2, skipped: 1, score: 0.938, error: null },
+    contract: { passed: 90, failed: 10, skipped: 2, score: 0.9, uniqueFailures: 3 },
+    load: { passed: 990, failed: 10, score: 0.99, p95Ms: { login: 12.3 }, requestsPerSecond: 123.5 },
+  } });
   expect(existsSync(`${f.root}/runs/smoke-backend-bun-1-grade`)).toBe(false);
 });
 
 test('a client is scored by its web E2E run, its CLI only as info', () => {
   const f = graded('grade-client', 'client/rust-core');
   expect(f.summary.score).toBe(0.833);
-  expect(f.summary.grade).toMatchObject({ suite: 'e2e', passed: 20, failed: 4, skipped: 3, error: null, cli: { passed: 12, failed: 1, skipped: 0 } });
+  expect(f.summary.grade).toMatchObject({ error: null, parts: { e2e: { passed: 20, failed: 4, skipped: 3, score: 0.833 } }, cli: { passed: 12, failed: 1, skipped: 0 } });
+  expect(Object.keys(f.summary.grade.parts)).toEqual(['e2e']);
+});
+
+test('a tool that could not be fetched names itself instead of blaming the team', () => {
+  const f = graded('grade-tool-error');
+  expect(f.summary.grade).toMatchObject({ error: 'k6 could not be installed', parts: {
+    api: { score: 0.938, error: null }, contract: { score: 0.9 }, load: { score: 0, error: 'k6 could not be installed' },
+  } });
 });
 
 test('a team that cannot be started scores zero with the reason', () => {
   const f = graded('grade-no-start');
   expect(f.summary.score).toBe(0);
-  expect(f.summary.grade).toMatchObject({ passed: 0, failed: 0, error: 'no start.sh' });
+  expect(f.summary.grade).toMatchObject({ error: 'no start.sh', parts: {
+    api: { score: 0, error: 'no start.sh' }, contract: { score: 0, error: 'no start.sh' }, load: { score: 0, error: 'no start.sh' },
+  } });
 });
 
 function decompile(mode: string, api = false) {

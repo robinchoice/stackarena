@@ -36,7 +36,7 @@ flowchart TD
     run -- "fresh git repo with spec and harness,<br/>prompt, time limit" --> agent
     run -- "session logs: tokens and cost" --> summary
     agent -- "last commit counts" --> grade
-    grade -- "passed / (passed + failed)" --> summary
+    grade -- "API, contract and load,<br/>or E2E for clients" --> summary
 
     summary -. "client teams" .-> decompile["Info column Decompilation<br/>orchestrator/decompile.ts"]
     summary -. "teams with a CLI" .-> cli["Info column CLI<br/>harness/cli/ against spec/cli.md"]
@@ -62,11 +62,17 @@ flowchart TD
 - **Grading.** [`grade.ts`](orchestrator/grade.ts) grades every run independently of the agent. It
   takes only what the team committed, next to `spec/` and `harness/` from the run's source revision
   (so changes the agent made there don't count), and starts it in a new container with a fresh
-  database or reference API and no model credentials. Backends are started with their `start.sh`
-  and graded with the API suite, clients are served with `serve-web.sh` and graded with the web
-  E2E suite on desktop and phone viewports. The score is passed / (passed + failed); tests the
-  harness itself skips for a target don't count. A `cli.sh` is tested as well, as info only. Logs
-  land in `results/runs/<id>/grade/`.
+  database or reference API and no model credentials. Each part scores passed / (passed + failed),
+  and the run's score is the unweighted mean of its parts:
+  - Backends, started with their `start.sh`: the **API** suite (`bun test api/`), a **contract**
+    run with Schemathesis against `openapi.yaml` (100 examples per operation, fixed seed, so every
+    backend gets the same requests; a test case passes if it passes all checks) and a **load** test
+    with k6 (`harness/load/sync.js`: sync, login and health at up to 50 virtual users; a request
+    passes with status 200). p95 latency per request and throughput are recorded as info.
+  - Clients, served with `serve-web.sh`: the web **E2E** suite on desktop and phone viewports.
+    Tests the harness skips for a target don't count. A `cli.sh` is tested as well, as info only.
+
+  Logs and reports land in `results/runs/<id>/grade/`.
 - **Night runs.** A systemd user timer calls [`night.ts`](orchestrator/night.ts) every 15 minutes
   between 01:30 and 02:15. It starts the next team only if no run is going and nobody has been
   working in an interactive agent session for 20 minutes, sizes the time limit so the run ends by
@@ -93,19 +99,34 @@ These are shown next to the contest and do not count towards it.
 Completed contest runs so far, taken from `results/runs/*/summary.json` (the directory itself is
 not checked in). Model `claude-opus-5-5` with effort `xhigh` in every run.
 
-| Run | Stack | Score (tests) | Started (UTC) | Minutes / limit | Outcome | List price | Billing | Commits | Spec |
-|---|---|---|---|---|---|---|---|---|---|
-| `backend-bun-1` | Bun, Hono, Drizzle ORM | **1.000** (37/37) | 2026-10-07 09:41 | 88.8 / 240 | success | $25.57 | not recorded | 28 | [`2686316`](https://github.com/robinchoice/stackarena/commit/2686316dd7c76251fcd02446c4e1020dcfa56b62) |
-| `backend-deno-1` | Deno, Hono, Drizzle ORM | **1.000** (37/37) | 2026-10-17 22:45 | 98.0 / 240 | success | $19.50 | api | 22 | [`382fa60`](https://github.com/robinchoice/stackarena/commit/382fa60a1e649fc64223e51d74ffd8388e61a9aa) |
-| `backend-go-1` | Go net/http, sqlc | **1.000** (37/37) | 2026-10-21 23:45 | 61.0 / 180 | success | $13.60 | api+subscription | 18 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
-| `backend-rust-1` | Axum, sqlx | **1.000** (37/37) | 2026-10-22 23:30 | 84.9 / 195 | success | $18.23 | api+subscription | 17 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
-| `backend-dart-1` | Dart Frog | **1.000** (37/37) | 2026-10-23 23:30 | 88.7 / 195 | success | $19.55 | api+subscription | 18 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
-| `backend-python-1` | FastAPI, async SQLAlchemy | **1.000** (37/37) | 2026-10-24 23:30 | 85.8 / 195 | success | $19.15 | api+subscription | 19 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
+| Run | Stack | Started (UTC) | Minutes / limit | Outcome | List price | Billing | Commits | Spec |
+|---|---|---|---|---|---|---|---|---|
+| `backend-bun-1` | Bun, Hono, Drizzle ORM | 2026-10-07 09:41 | 88.8 / 240 | success | $25.57 | not recorded | 28 | [`2686316`](https://github.com/robinchoice/stackarena/commit/2686316dd7c76251fcd02446c4e1020dcfa56b62) |
+| `backend-deno-1` | Deno, Hono, Drizzle ORM | 2026-10-17 22:45 | 98.0 / 240 | success | $19.50 | api | 22 | [`382fa60`](https://github.com/robinchoice/stackarena/commit/382fa60a1e649fc64223e51d74ffd8388e61a9aa) |
+| `backend-go-1` | Go net/http, sqlc | 2026-10-21 23:45 | 61.0 / 180 | success | $13.60 | api+subscription | 18 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
+| `backend-rust-1` | Axum, sqlx | 2026-10-22 23:30 | 84.9 / 195 | success | $18.23 | api+subscription | 17 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
+| `backend-dart-1` | Dart Frog | 2026-10-23 23:30 | 88.7 / 195 | success | $19.55 | api+subscription | 18 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
+| `backend-python-1` | FastAPI, async SQLAlchemy | 2026-10-24 23:30 | 85.8 / 195 | success | $19.15 | api+subscription | 19 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
 
-- **Score** comes from `grade.ts` with the API suite (37 tests in each of these revisions). These six
-  runs predate it and were graded afterwards from their final commits, each with the harness of its
-  own source revision. All six pass every test, so the API suite alone does not separate them; the
-  contract and load tests in `harness/` are not part of the score yet.
+### Grades
+
+| Run | Score | API | Contract | Load | p95 ms: sync-delta / sync-full / login / health | Requests/s |
+|---|---|---|---|---|---|---|
+| `backend-bun-1` | **1.000** | 1.000 (37/37) | 1.000 (805/805) | 1.000 (10717/10717) | 457.1 / 626.9 / 1904.0 / 186.7 | 158.4 |
+| `backend-deno-1` | **1.000** | 1.000 (37/37) | 1.000 (805/805) | 1.000 (7943/7943) | 661.1 / 1127.4 / 7324.1 / 421.6 | 114.6 |
+| `backend-go-1` | **1.000** | 1.000 (37/37) | 1.000 (805/805) | 1.000 (22782/22782) | 194.1 / 349.7 / 1596.9 / 111.6 | 413.8 |
+| `backend-rust-1` | **1.000** | 1.000 (37/37) | 1.000 (805/805) | 1.000 (8587/8587) | 547.0 / 930.9 / 2899.7 / 498.6 | 142.0 |
+| `backend-dart-1` | **1.000** | 1.000 (37/37) | 1.000 (805/805) | 1.000 (8856/8856) | 470.2 / 722.8 / 9866.8 / 267.4 | 118.8 |
+| `backend-python-1` | **1.000** | 1.000 (37/37) | 1.000 (805/805) | 1.000 (6603/6603) | 1146.4 / 1173.7 / 3502.8 / 1055.2 | 103.1 |
+
+- **Score** is the mean of the API, contract and load parts from `grade.ts`, each given as score
+  (passed/total): API tests, Schemathesis test cases and k6 checks. These six runs predate
+  `grade.ts` and were graded afterwards from their final commits, each with the harness of its own
+  source revision; the contract and load tests are the same in all of them. All six pass every
+  part, so the score does not separate them yet.
+- **p95 latency and requests/s** are info only. They were measured one run after another on the
+  same shared laptop, so other work on it affects them: grading `backend-go-1` again an hour later
+  changed them by up to a factor of 2.7. The table shows the latest grading.
 - **Outcome** is how the agent's session ended: `success` means the agent finished on its own
   within the limit.
 - **List price** is the cumulative list price of all requests, priced from the session logs.
