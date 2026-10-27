@@ -1,12 +1,7 @@
 {
   "client/dart": { "name": "Dart", "stack": "Flutter (Dart)" },
-  "client/svelte-tauri": { "name": "Svelte-Tauri", "stack": "SvelteKit and Tauri 2 for desktop and mobile (TypeScript)" },
-  "client/svelte-electron": { "name": "Svelte-Electron", "stack": "SvelteKit, Electron for desktop and Capacitor for mobile (TypeScript)" },
-  "client/react": { "name": "React", "stack": "Expo / React Native with React Native Web, desktop through Tauri around the web build (TypeScript)" },
-  "client/rust": { "name": "Rust", "stack": "Dioxus 0.7 for web, desktop and mobile (Rust)" },
   "client/go": { "name": "Go", "stack": "Fyne 2.8, web through WebAssembly (Go)" },
-  "client/python": { "name": "Python", "stack": "Flet 1.0 (Python)" },
-  "client/kotlin": { "name": "Kotlin", "stack": "Compose Multiplatform for Android, iOS, desktop and web through WebAssembly (Kotlin)" },
+  "client/rust": { "name": "Rust", "stack": "Dioxus 0.7 for web, desktop and mobile (Rust)" },
   "client/rust-core": {
     "name": "Rust-Core",
     "stack": "a shared Rust core and native UIs: SwiftUI for iOS and macOS, Jetpack Compose for Android, WinUI 3 (C#) for Windows, GTK 4 with libadwaita in Rust for Linux, and a web UI using the core compiled to WebAssembly",
@@ -16,6 +11,11 @@
       "Work in this order: core and CLI, web, Linux, then the other UIs."
     ]
   },
+  "client/kotlin": { "name": "Kotlin", "stack": "Compose Multiplatform for Android, iOS, desktop and web through WebAssembly (Kotlin)" },
+  "client/python": { "name": "Python", "stack": "Flet 1.0 (Python)" },
+  "client/svelte-tauri": { "name": "Svelte-Tauri", "stack": "SvelteKit and Tauri 2 for desktop and mobile (TypeScript)" },
+  "client/svelte-electron": { "name": "Svelte-Electron", "stack": "SvelteKit, Electron for desktop and Capacitor for mobile (TypeScript)" },
+  "client/react": { "name": "React", "stack": "Expo / React Native with React Native Web, desktop through Tauri around the web build (TypeScript)" },
   "backend/bun": { "name": "Bun", "stack": "Bun, Hono and Drizzle ORM (TypeScript)" },
   "backend/deno": { "name": "Deno", "stack": "Deno, Hono and Drizzle ORM (TypeScript)" },
   "backend/go": { "name": "Go", "stack": "Go net/http with sqlc" },
