@@ -440,11 +440,11 @@ function screenAgents(root) {
   for (const e of list) { const slot = root.querySelector(`[data-feed="${e.id}"]`); slot.appendChild(e.feed.el); e.feed.el.scrollTop = e.feed.el.scrollHeight; }
   update();
 }
-// Graded runs rank by their score, ahead of runs that only have the agent's own tests
+// Graded runs rank by their score, ahead of ungraded ones; on equal scores the lower list price
+// wins, then the shorter time. The agent's own tests do not count, it picks how many it runs
 function rankRows(list) {
   const graded = (e) => e.state?.summary?.grade?.score ?? -1;
-  const score = (e) => { const t = e.state?.tests; return t ? t.pass / Math.max(1, t.pass + t.fail) : -1; };
-  return list.sort((a, b) => graded(b) - graded(a) || score(b) - score(a) || (b.state?.tests?.pass ?? 0) - (a.state?.tests?.pass ?? 0) || elapsed(a).ms - elapsed(b).ms);
+  return list.sort((a, b) => graded(b) - graded(a) || (a.state?.usd ?? 0) - (b.state?.usd ?? 0) || elapsed(a).ms - elapsed(b).ms);
 }
 function screenTable(root) {
   const league = (kind, title) => {
