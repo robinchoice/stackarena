@@ -6,6 +6,7 @@
   "client/rust": { "name": "Rust", "stack": "Dioxus 0.7 for web, desktop and mobile (Rust)" },
   "client/go": { "name": "Go", "stack": "Fyne 2.8, web through WebAssembly (Go)" },
   "client/python": { "name": "Python", "stack": "Flet 1.0 (Python)" },
+  "client/kotlin": { "name": "Kotlin", "stack": "Compose Multiplatform for Android, iOS, desktop and web through WebAssembly (Kotlin)" },
   "client/rust-core": {
     "name": "Rust-Core",
     "stack": "a shared Rust core and native UIs: SwiftUI for iOS and macOS, Jetpack Compose for Android, WinUI 3 (C#) for Windows, GTK 4 with libadwaita in Rust for Linux, and a web UI using the core compiled to WebAssembly",
