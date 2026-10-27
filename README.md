@@ -78,7 +78,8 @@ flowchart TD
   working in an interactive agent session for 20 minutes, sizes the time limit so the run ends by
   about 04:45, and checks after one minute that the run really started.
 - **Live view.** `bun orchestrator/live/server.ts` serves a read-only view of all runs on
-  `http://127.0.0.1:4520`: transcripts, commits, the agents' own test runs and cost over time.
+  `http://127.0.0.1:4520`: transcripts, commits, the agents' own test runs, cost over time and,
+  once graded, each run's score with its parts.
 
 ### Info columns
 

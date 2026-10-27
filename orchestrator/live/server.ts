@@ -244,6 +244,8 @@ async function state(id: string) {
     requests: u.requests, tokens: u.tokens, usd: u.usd, usageSource: u.source, quota: q,
     series: series(dir, Date.parse(started)),
     commits, files, code, preview, server,
+    // grade.ts works in this copy while it grades, after summary.json is written
+    grading: !summary?.grade && existsSync(`${RUNS}/${id}-grade`),
     tests: tests.at(-1) ?? null, testRuns: tests.length,
   };
 }

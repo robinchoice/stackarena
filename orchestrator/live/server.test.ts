@@ -84,3 +84,14 @@ test('the event stream resumes at the offset and leaves an unfinished line for l
     ]);
   });
 });
+
+test('a finished run counts as grading while its grade copy exists', async () => {
+  await withState(async (dir, state) => {
+    writeFileSync(`${dir}/summary.json`, JSON.stringify({ started: '2026-10-25T12:00:00Z' }));
+    expect((await state()).grading).toBe(false);
+    mkdirSync(`${dir}/../../../runs/backend-bun-1-grade`);
+    expect((await state()).grading).toBe(true);
+    writeFileSync(`${dir}/summary.json`, JSON.stringify({ started: '2026-10-25T12:00:00Z', grade: { score: 1 } }));
+    expect((await state()).grading).toBe(false);
+  });
+});

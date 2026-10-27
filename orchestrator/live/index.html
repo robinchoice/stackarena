@@ -49,7 +49,7 @@ a{color:inherit;text-decoration:none}
 .thead .stack{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .thead .clock{margin-left:auto;font:600 15px var(--mono);white-space:nowrap}
 .thead .clock small{color:var(--muted);font-weight:400}
-.tbody{flex:1;min-height:0;position:relative}
+.tbody{flex:1;min-height:0;position:relative;container-type:size}
 .tfoot{padding:8px 14px;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tfoot b{color:var(--ink);font-weight:600}
 
@@ -72,6 +72,28 @@ a{color:inherit;text-decoration:none}
 .steps{display:grid;gap:5px;color:var(--muted);font-size:13px}
 .steps div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .steps time{font:11px var(--mono);color:var(--dim);margin-right:8px}
+.parts{display:grid;gap:9px}
+.part{display:grid;grid-template-columns:72px 64px minmax(0,1fr);align-items:baseline;gap:4px 10px}
+.part b{font-size:24px}
+.part small{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meter{grid-column:1/-1;height:4px;background:var(--panel2);border-radius:2px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--ok)}
+.info{color:var(--muted);font-size:12.5px}
+.graded{display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px 28px}
+.graded .score{flex-direction:column;align-items:flex-start;gap:6px}
+.graded .parts{flex:1;min-width:240px}
+/* Small tiles on the overview: score beside its parts, details only on the team page */
+@container (max-height:150px){
+  .board{padding:10px 14px;gap:8px}
+  .graded{flex-wrap:nowrap;align-items:center;gap:22px}
+  .graded .score .n{font-size:min(64px,70cqh)}
+  .graded .score .lbl,.board .info,.board .now,.board .steps,.board .squares,.board .srv:not(.gerr),.meter{display:none}
+  .graded .parts{display:flex;gap:18px;min-width:0}
+  .part{display:flex;flex-direction:column;gap:2px;color:var(--muted);font-size:12px}
+  .part b{font-size:22px;color:var(--ink)}
+  .part small{display:none}
+}
+td small.parts{display:block;color:var(--muted);font-size:12px;line-height:1.5}
 
 /* feed */
 .feed{position:absolute;inset:0;overflow-y:auto;padding:12px 14px 30px}
@@ -156,6 +178,8 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const hhmm = (ms) => { const m = Math.max(0, Math.floor(ms / 60000)); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; };
 const fmt = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} Mio.` : n >= 1e3 ? `${Math.round(n / 1e3)} Tsd.` : String(n ?? 0));
 const pct = (x) => (x == null ? '–' : `${Math.round(x * 100)} %`);
+const num3 = (x) => x.toLocaleString('de-DE', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+const PARTS = { api: 'API', contract: 'Contract', load: 'Last', e2e: 'E2E' };
 const clockTime = (iso) => new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 
 /* ---------- data: one entry per run, shared by all screens ---------- */
@@ -346,19 +370,39 @@ function spark(series, w = 140, h = 34) {
   return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs><linearGradient id="sg" x1="0" y1="${h}" x2="${w}" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#F2C14E"/><stop offset="1" stop-color="#A2C974"/></linearGradient></defs><polyline points="${pts}" fill="none" stroke="url(#sg)" stroke-width="2" stroke-linejoin="round"/></svg>`;
 }
 
+// The independent grading by grade.ts after the run: score, its parts and the info beside them
+function gradeBoard(s) {
+  const g = s.summary?.grade;
+  if (!g) return s.grading ? '<div class="now">Wird bewertet …<small>mit dem letzten Commit, frischer Umgebung und unverändertem Harness</small></div>' : '';
+  const parts = Object.entries(g.parts ?? {});
+  const load = g.parts?.load;
+  const info = [
+    load?.p95Ms && `p95: ${['sync-delta', 'sync-full', 'login', 'health'].map((k) => `${k} ${Math.round(load.p95Ms[k])} ms`).join(' · ')}, ${Math.round(load.requestsPerSecond)} Anfragen/s (Info)`,
+    g.cli && `CLI (Info): ${g.cli.passed}/${g.cli.passed + g.cli.failed}`,
+  ].filter(Boolean);
+  return `<div class="graded"><div class="score"><span class="n disp">${num3(g.score)}</span><span class="lbl">Score${parts.length ? `, Mittel aus ${parts.length} Teilnoten` : ''}<br>bewertet ${clockTime(g.started)} in ${g.minutes.toLocaleString('de-DE')} min</span></div>
+    ${g.error ? `<div class="srv down gerr">${esc(g.error)}</div>` : ''}
+    <div class="parts">${parts.map(([k, p]) => `<div class="part"><span>${PARTS[k] ?? esc(k)}</span><b class="disp">${num3(p.score)}</b><small>${p.error ? esc(p.error) : `${p.passed}/${p.passed + p.failed}${p.skipped ? `, ${p.skipped} übersprungen` : ''}`}</small><div class="meter"><i style="width:${p.score * 100}%"></i></div></div>`).join('')}</div></div>
+    ${info.map((t) => `<div class="info">${t}</div>`).join('')}`;
+}
+
 // The live "picture" of a team: its web app for clients, the score board for backends
 function appBody(e) {
   const s = e.state;
   if (!s) return '<div class="noapp">lädt …</div>';
   if (s.kind === 'client') {
     if (s.preview) return `<div class="appview"><iframe src="${s.preview}" data-preview="${s.preview}"></iframe></div>`;
+    const graded = gradeBoard(s);
+    if (graded) return `<div class="board" style="background:var(--panel)">${graded}</div>`;
     return `<div class="noapp">${s.live ? 'Noch kein Web-Build erreichbar.<br>Sobald der Agent ihn auf Port 5173 startet, erscheint die App hier.' : 'Der Lauf ist beendet. Die App lief im Container.'}</div>`;
   }
   const t = s.tests;
   const total = t ? t.pass + t.fail : 37;
   const sq = t && t.cases.length ? t.cases.map((c) => `<i class="${c.ok ? 'ok' : 'bad'}" title="${esc(c.name)}"></i>`).join('') : Array.from({ length: total }, (_, i) => `<i class="${t ? (i < t.pass ? 'ok' : 'bad') : ''}"></i>`).join('');
+  const graded = gradeBoard(s);
+  const own = `${t?.at ? `letzter Lauf ${clockTime(t.at)}` : 'noch kein Testlauf'}`;
   return `<div class="board">
-    <div class="score"><span class="n disp ${e.flash ? 'flash' : ''}">${t ? t.pass : 0}</span><span class="of disp">/ ${total}</span><span class="lbl">API-Tests grün<br>${t?.at ? `letzter Lauf ${clockTime(t.at)}` : 'noch kein Testlauf'}</span></div>
+    ${graded ? `${graded}<div class="info">Eigene API-Tests des Agenten: ${t ? t.pass : 0}/${total}, ${own}</div>` : `<div class="score"><span class="n disp ${e.flash ? 'flash' : ''}">${t ? t.pass : 0}</span><span class="of disp">/ ${total}</span><span class="lbl">API-Tests grün<br>${own}</span></div>`}
     <div class="squares">${sq}</div>
     <div class="srv ${s.server ? 'up' : 'down'}"><span class="dot" style="background:currentColor"></span>${s.server ? 'Server antwortet auf /health' : s.live ? 'Server antwortet noch nicht' : 'Lauf beendet'}</div>
     <div class="now">${esc(e.feed.lastAction || '…')}<small>gerade dabei</small></div>
@@ -396,18 +440,22 @@ function screenAgents(root) {
   for (const e of list) { const slot = root.querySelector(`[data-feed="${e.id}"]`); slot.appendChild(e.feed.el); e.feed.el.scrollTop = e.feed.el.scrollHeight; }
   update();
 }
+// Graded runs rank by their score, ahead of runs that only have the agent's own tests
 function rankRows(list) {
+  const graded = (e) => e.state?.summary?.grade?.score ?? -1;
   const score = (e) => { const t = e.state?.tests; return t ? t.pass / Math.max(1, t.pass + t.fail) : -1; };
-  return list.sort((a, b) => score(b) - score(a) || (b.state?.tests?.pass ?? 0) - (a.state?.tests?.pass ?? 0) || elapsed(a).ms - elapsed(b).ms);
+  return list.sort((a, b) => graded(b) - graded(a) || score(b) - score(a) || (b.state?.tests?.pass ?? 0) - (a.state?.tests?.pass ?? 0) || elapsed(a).ms - elapsed(b).ms);
 }
 function screenTable(root) {
   const league = (kind, title) => {
     const list = rankRows(visible().filter((e) => e.meta.kind === kind));
     if (!list.length) return '';
-    return `<section class="league"><h2 class="disp">${title}</h2><table><thead><tr><th>Platz</th><th>Team</th><th>Status</th><th>Zeit</th><th>Tests grün</th><th>Commits</th><th>Code-Zeilen</th><th>Anfragen</th><th>Output-Tokens</th><th>Listenpreis</th><th>Kostenverlauf</th></tr></thead><tbody>${list.map((e, i) => {
+    return `<section class="league"><h2 class="disp">${title}</h2><table><thead><tr><th>Platz</th><th>Team</th><th>Status</th><th>Zeit</th><th>Score</th><th>Teilnoten</th><th>Eigene Tests</th><th>Commits</th><th>Code-Zeilen</th><th>Anfragen</th><th>Output-Tokens</th><th>Listenpreis</th><th>Kostenverlauf</th></tr></thead><tbody>${list.map((e, i) => {
       const s = e.state ?? {};
       const t = s.tests;
-      return `<tr class="${i === 0 ? 'lead' : ''}"><td class="rank disp">${i + 1}</td><td class="team"><a class="disp" href="#/team/${e.id}">${esc(e.meta.name)}</a><small>${esc(e.meta.stack)}</small></td><td>${badge(e)}</td><td data-clock="${e.id}"></td><td class="big disp">${t ? `${t.pass}/${t.pass + t.fail}` : '–'}</td><td>${s.commits?.length ?? 0}</td><td>${fmt(s.code ?? 0)}</td><td>${s.requests ?? 0}</td><td>${fmt(s.tokens?.output ?? 0)}</td><td class="big disp">${(s.usd ?? 0).toFixed(2)} $</td><td>${spark(s.series)}</td></tr>`;
+      const g = s.summary?.grade;
+      const parts = Object.entries(g?.parts ?? {}).map(([k, p]) => `${PARTS[k] ?? esc(k)} ${num3(p.score)}`).join('<br>');
+      return `<tr class="${i === 0 ? 'lead' : ''}"><td class="rank disp">${i + 1}</td><td class="team"><a class="disp" href="#/team/${e.id}">${esc(e.meta.name)}</a><small>${esc(e.meta.stack)}</small></td><td>${badge(e)}</td><td data-clock="${e.id}"></td><td class="big disp">${g ? num3(g.score) : s.grading ? '…' : '–'}</td><td><small class="parts">${parts || esc(g?.error ?? '')}</small></td><td class="big disp">${t ? `${t.pass}/${t.pass + t.fail}` : '–'}</td><td>${s.commits?.length ?? 0}</td><td>${fmt(s.code ?? 0)}</td><td>${s.requests ?? 0}</td><td>${fmt(s.tokens?.output ?? 0)}</td><td class="big disp">${(s.usd ?? 0).toFixed(2)} $</td><td>${spark(s.series)}</td></tr>`;
     }).join('')}</tbody></table></section>`;
   };
   root.innerHTML = `<div class="tables">${league('client', 'Client-Liga')}${league('backend', 'Backend-Liga')}<section class="league"><h2 class="disp">Ticker</h2><div class="ticker-list">${ticks.slice(0, 40).map((t) => `<div class="tick"><time>${new Date(t.at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</time><span>${t.html}</span></div>`).join('') || '<p class="tick">Noch nichts passiert.</p>'}</div></section></div>`;
@@ -437,7 +485,7 @@ function statsBody(e) {
     return files.length ? walk(root, 0) : '<span class="muted">noch keine Dateien</span>';
   };
   return `<div class="statgrid">
-      <div class="stat"><div class="v disp">${t ? `${t.pass}/${t.pass + t.fail}` : '–'}</div><div class="l">Tests grün (${t?.suite ?? '–'})</div></div>
+      <div class="stat"><div class="v disp">${t ? `${t.pass}/${t.pass + t.fail}` : '–'}</div><div class="l">Eigene Tests (${t?.suite ?? '–'})</div></div>
       <div class="stat"><div class="v disp">${s.usd.toFixed(2)} $</div><div class="l">Listenpreis</div></div>
       <div class="stat"><div class="v disp">${s.commits.length}</div><div class="l">Commits</div></div>
       <div class="stat"><div class="v disp">${fmt(s.code)}</div><div class="l">Code-Zeilen</div></div>
