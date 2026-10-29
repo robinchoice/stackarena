@@ -104,6 +104,11 @@ laufender Lauf: `journalctl --user -fu stackarena-<id>`.
 - Die Bewertung läuft nach dem Agenten in derselben Unit, höchstens 60 min (Installieren, Bauen,
   Tests; die Backends brauchten 4–13 min). Sie nutzt kein Modell, ein Nachtlauf belegt das Abo also
   nicht länger. Arbeitskopie `runs/<id>-grade` wird danach gelöscht.
+- Endet `run.ts` (nach der Bewertung, mit Fehler oder per SIGTERM), entfernt es im Team-Repo
+  `runs/<id>` alles, was dessen `.gitignore` ausschließt (`git clean -fdX`): Build-Reste wie ein
+  Rust-`target/` mit 13 GB. Quelltext und Commits bleiben, `grade.ts --run` und `decompile.ts` lesen
+  nur per `git archive`. Es räumt nur, wenn `runs/<id>` selbst Toplevel eines Repos ist, sonst träfe
+  `clean -X` `runs/` und `results/` im stackarena-Repo. Ein `kill -9` überspringt das Aufräumen.
 - Ein abgebrochener Lauf blockiert seine ID: `runs/<id>` und `results/runs/<id>` nach
   `results/aborted/` verschieben, bevor er neu startet. Genauso blockiert eine fertige Analyse ihre
   ID über `runs/<id>-decompile`.

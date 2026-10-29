@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -47,7 +47,9 @@ if (args.includes('archive')) {
   writeFileSync(root + '/archived', args[args.indexOf('archive') + 1]);
   const tar = Bun.spawnSync(['/usr/bin/tar', '-cf', '-', '--files-from', '/dev/null']);
   process.stdout.write(tar.stdout);
-} else if (args.includes('rev-parse')) {
+} else if (args.includes('--show-toplevel')) console.log(process.env.STACKARENA_MODE === 'foreign-toplevel' ? root : process.cwd());
+else if (args.includes('clean')) writeFileSync(root + '/cleaned', process.cwd());
+else if (args.includes('rev-parse')) {
   if (args.includes('-C')) {
     let count = 0;
     try { count = +readFileSync(root + '/revision-reads', 'utf8'); } catch {}
@@ -127,6 +129,7 @@ test('a failed compose setup is torn down', () => {
   const result = f.run('run.ts', ['--team', 'backend/bun', '--smoke']);
   expect(result.exitCode).not.toBe(0);
   expect(f.calls()).toEqual(['up', 'down']);
+  expect(readFileSync(`${f.root}/cleaned`, 'utf8')).toBe(realpathSync(`${f.root}/runs/smoke-backend-bun-1`));
 });
 
 test('the first failed night start is archived before its retry', () => {
@@ -190,6 +193,14 @@ test('a run is graded on a fresh setup without credentials', () => {
     load: { passed: 990, failed: 10, score: 0.99, p95Ms: { login: 12.3 }, requestsPerSecond: 123.5 },
   } });
   expect(existsSync(`${f.root}/runs/smoke-backend-bun-1-grade`)).toBe(false);
+  expect(readFileSync(`${f.root}/cleaned`, 'utf8')).toBe(realpathSync(`${f.root}/runs/smoke-backend-bun-1`));
+});
+
+test('ignored files are only removed in the run repository itself', () => {
+  const f = fixture('foreign-toplevel');
+  const result = f.run('run.ts', ['--team', 'backend/bun', '--smoke']);
+  expect(result.exitCode).toBe(0);
+  expect(existsSync(`${f.root}/cleaned`)).toBe(false);
 });
 
 test('a client is scored by its web E2E run, its CLI only as info', () => {

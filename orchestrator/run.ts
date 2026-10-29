@@ -3,7 +3,7 @@
 //   systemd-run --user --unit stackarena-backend-bun-1 --same-dir --collect \
 //     bun orchestrator/run.ts --team backend/bun [--run 1] [--hours 4] [--smoke]
 // Follow it with journalctl --user -fu stackarena-backend-bun-1.
-import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { parseArgs } from 'node:util';
 import { grade } from './grade';
@@ -64,6 +64,17 @@ sh(['git', 'init', '-q'], { cwd: runDir });
 sh(['git', 'add', '--', 'spec', 'harness', folder], { cwd: runDir });
 sh(['git', 'commit', '-q', '-m', 'Contest start'], { cwd: runDir });
 const startCommit = sh(['git', 'rev-parse', 'HEAD'], { cwd: runDir });
+
+// Once the run ends, graded or aborted, the build output the team's .gitignore excludes goes (one Rust
+// target/ reached 13 GB). Source and commits stay for grade.ts --run and decompile.ts. Only in a
+// repository of its own: from the stackarena checkout, clean -X would remove runs/ and results/.
+process.on('exit', () => {
+  const top = Bun.spawnSync(['git', 'rev-parse', '--show-toplevel'], { cwd: runDir, stdout: 'pipe', stderr: 'pipe' });
+  if (top.exitCode === 0 && top.stdout.toString().trim() === realpathSync(runDir))
+    Bun.spawnSync(['git', 'clean', '-fdXq'], { cwd: runDir });
+});
+// systemctl --user stop ends the unit with SIGTERM, which would skip the exit handler
+process.on('SIGTERM', () => process.exit(143));
 
 const environment =
   (kind === 'backend'
