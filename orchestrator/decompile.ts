@@ -149,10 +149,11 @@ async function agent(name: string, a: Agent) {
     if (apiKey && !checkLimits() && failed?.is_error && failed.api_error_status && failed.session_id) {
       billing = 'api+subscription';
       console.log(`${run} ${name}: API key failed with ${failed.api_error_status}, continuing on the subscription`);
-      exitCode = await start({ CLAUDE_CODE_OAUTH_TOKEN: token! }, [
+      const resume = existsSync(`${a.dir}/session/${failed.session_id}.jsonl`);
+      exitCode = await start({ CLAUDE_CODE_OAUTH_TOKEN: token! }, resume ? [
         '--resume', failed.session_id, '-p',
         'The analysis continues after an API error that interrupted it. Carry on where you left off.',
-      ]);
+      ] : ['-p', a.prompt]);
     }
     completed = true;
   } finally {

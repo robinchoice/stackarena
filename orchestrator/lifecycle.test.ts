@@ -105,10 +105,17 @@ if (name.endsWith('-pack')) {
 } else if (out) writeFileSync(out + '/report.json', mode === 'bad-report' ? '{"answers":' : JSON.stringify({ answers: {} }));
 const resumed = args.includes('--resume');
 const fallback = mode.startsWith('fallback');
+const freshFallback = mode === 'fallback-no-session';
+const apiAttempt = args.some(x => x.startsWith('ANTHROPIC_API_KEY='));
+if (freshFallback && apiAttempt) {
+  console.log(JSON.stringify({ type: 'result', is_error: true, api_error_status: 400, session_id: 'fixture-session', subtype: 'error' }));
+  process.exit(1);
+}
+if (freshFallback && resumed) process.exit(1);
 const input = name.endsWith('-pack') ? 0 : mode === 'budget' || mode === 'budget-complete' ? 1500000 : mode === 'fallback-budget' ? 700000 : 100000;
-appendFileSync(session + '/fixture.jsonl', JSON.stringify({ type: 'assistant', message: { id: resumed ? 'second' : 'first', usage: { input_tokens: input } } }) + '\\n');
+appendFileSync(session + '/fixture-session.jsonl', JSON.stringify({ type: 'assistant', message: { id: resumed ? 'second' : 'first', usage: { input_tokens: input } } }) + '\\n');
 if (!name.endsWith('-pack') && (mode === 'budget' || (mode === 'fallback-budget' && resumed))) await Bun.sleep(1000);
-console.log(JSON.stringify(fallback && !resumed && !name.endsWith('-pack')
+console.log(JSON.stringify(fallback && !freshFallback && !resumed && !name.endsWith('-pack')
   ? { type: 'result', is_error: true, api_error_status: 429, session_id: 'fixture-session', subtype: 'error' }
   : { type: 'result', subtype: 'success' }));
 `, { mode: 0o755 });
@@ -279,6 +286,15 @@ test('a fallback below budget completes normally', () => {
   expect(f.result.exitCode).toBe(0);
   expect(f.calls()).not.toContain('stop');
   expect(f.report().targets.web).toMatchObject({ budgetExceeded: false, outcome: 'success', billing: 'api+subscription', listPriceUsd: 0.8 });
+});
+
+test('an API rejection before a session exists starts fresh on the subscription', () => {
+  const f = decompile('fallback-no-session', true);
+  expect(f.result.stderr.toString()).toBe('');
+  expect(f.result.exitCode).toBe(0);
+  expect(f.calls().filter((c) => c === 'run')).toHaveLength(4);
+  expect(f.report().pack.run).toMatchObject({ outcome: 'success', billing: 'api+subscription' });
+  expect(f.report().targets.web).toMatchObject({ outcome: 'success', billing: 'api+subscription' });
 });
 
 test('a completed result keeps success when final usage exceeds the budget', () => {
