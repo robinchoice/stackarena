@@ -74,7 +74,8 @@ Kein Deploy. Nachtläufe startet der User-Timer `stackarena-night.timer` (01:30�
 nach der Savor-Nachtschicht ab 00:00, die bis etwa 01:30 dauert), eingerichtet mit
 `systemctl --user link orchestrator/stackarena-night.{service,timer}` und
 `systemctl --user enable --now stackarena-night.timer`, nach Änderungen
-`systemctl --user daemon-reload`. Der Start um 01:30 bekommt 3,25 h, spätere entsprechend weniger,
+`systemctl --user daemon-reload`. Welche Teams in welcher Reihenfolge laufen, legen `ROUND` und `TEAMS` in `night.ts` fest, die
+Lauf-ID endet auf die Rundennummer (Runde 2: `backend-go-2`). Der Start um 01:30 bekommt 3,25 h, spätere entsprechend weniger,
 jeder Lauf endet gegen 04:45. `night.ts` zählt einen Start erst, wenn die Unit nach einer Minute noch
 läuft, sonst versucht es nach 30 s genau einmal neu und verschiebt Angelegtes nach `results/aborted/`,
 damit das Team als Nächstes dran bleibt. Log: `journalctl --user -u stackarena-night`,

@@ -15,6 +15,7 @@
   "client/python": { "name": "Python", "stack": "Flet 1.0 (Python)" },
   "client/svelte-tauri": { "name": "Svelte-Tauri", "stack": "SvelteKit and Tauri 2 for desktop and mobile (TypeScript)" },
   "client/svelte-electron": { "name": "Svelte-Electron", "stack": "SvelteKit, Electron for desktop and Capacitor for mobile (TypeScript)" },
+  "client/typescript": { "name": "TypeScript", "stack": "TypeScript without a UI framework (DOM APIs, a bundler of your choice), Electron for desktop and Capacitor for mobile" },
   "client/react": { "name": "React", "stack": "Expo / React Native with React Native Web, desktop through Tauri around the web build (TypeScript)" },
   "backend/bun": { "name": "Bun", "stack": "Bun, Hono and Drizzle ORM (TypeScript)" },
   "backend/deno": { "name": "Deno", "stack": "Deno, Hono and Drizzle ORM (TypeScript)" },

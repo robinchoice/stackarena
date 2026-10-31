@@ -1,6 +1,6 @@
 // Starts the next contest run at night when nobody is at work. stackarena-night.timer calls it every
 // 15 minutes from 01:30 to 02:15, once the Savor workflow Nachtschicht (00:00, done by about 01:30)
-// is through; one run at a time, teams in the order of teams.json with backends first. A run ends at
+// is through; one run at a time, the teams of the current round in order. A run ends at
 // about 04:45 and is torn down by 05:00, so the 5-hour window of the subscription that holds its last
 // request closes by 10:00 at the latest. Runs with the API key draw on the API credits instead and
 // touch the subscription only once those are used up.
@@ -13,6 +13,10 @@ const HOURS = 3.25;
 const END_HOUR = 5;
 const QUIET_MINUTES = 20;
 const RETRY_SECONDS = 30;
+// Round 2: the backends Bun, Rust and Go and the clients Dart and Svelte-Electron again, plus a
+// client without a UI framework. Run IDs end in the round number, e.g. backend-go-2.
+const ROUND = 2;
+const TEAMS = ['backend/bun', 'backend/rust', 'backend/go', 'client/dart', 'client/svelte-electron', 'client/typescript'];
 
 function sh(cmd: string[]) {
   const r = Bun.spawnSync(cmd, { cwd: REPO, stdout: 'pipe', stderr: 'pipe' });
@@ -61,13 +65,10 @@ const session = (file: string) =>
 const busy = recent.find((f) => !unattended.has(session(f)));
 if (busy) skip(`agent session active in the last ${QUIET_MINUTES} minutes: ${busy}`);
 
-const teams = Object.keys(JSON.parse(readFileSync(`${REPO}/orchestrator/teams.json`, 'utf8')));
-const next = [...teams.filter((t) => t.startsWith('backend/')), ...teams.filter((t) => t.startsWith('client/'))].find(
-  (t) => !existsSync(`${REPO}/runs/${t.replace('/', '-')}-1`),
-);
-if (!next) skip('every team has run');
+const next = TEAMS.find((t) => !existsSync(`${REPO}/runs/${t.replace('/', '-')}-${ROUND}`));
+if (!next) skip(`every team of round ${ROUND} has run`);
 
-const id = `${next.replace('/', '-')}-1`;
+const id = `${next.replace('/', '-')}-${ROUND}`;
 const unit = `stackarena-${id}`;
 // A start can fail within seconds, for example when the machine is still finishing a suspend and
 // refuses the sleep inhibitor. Only a unit still active a minute later counts as started. A failed
@@ -78,7 +79,7 @@ function start() {
   sh([
     'systemd-run', '--user', '--unit', unit, '--same-dir', '--collect',
     'systemd-inhibit', '--what=sleep:idle', '--who=stackarena', `--why=contest run ${id}`,
-    process.execPath, `${REPO}/orchestrator/run.ts`, '--team', next!, '--hours', String(hours),
+    process.execPath, `${REPO}/orchestrator/run.ts`, '--team', next!, '--run', String(ROUND), '--hours', String(hours),
   ]);
   Bun.sleepSync(60_000);
   if (Bun.spawnSync(['systemctl', '--user', 'is-active', '--quiet', unit]).exitCode === 0) return true;

@@ -33,8 +33,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 const root = process.env.STACKARENA_FIXTURE;
 const count = existsSync(root + '/starts') ? +readFileSync(root + '/starts', 'utf8') : 0;
 writeFileSync(root + '/starts', String(count + 1));
-mkdirSync(root + '/runs/backend-bun-1', { recursive: true });
-mkdirSync(root + '/results/runs/backend-bun-1/session', { recursive: true });
+const arg = (name) => process.argv[process.argv.indexOf(name) + 1];
+const id = arg('--team').replace('/', '-') + '-' + arg('--run');
+mkdirSync(root + '/runs/' + id, { recursive: true });
+mkdirSync(root + '/results/runs/' + id + '/session', { recursive: true });
 `, { mode: 0o755 });
   writeFileSync(`${root}/bin/systemctl`, `#!${process.execPath}
 import { readFileSync } from 'node:fs';
@@ -145,7 +147,7 @@ test('the first failed night start is archived before its retry', () => {
   expect(result.stderr.toString()).toBe('');
   expect(result.exitCode).toBe(0);
   expect(readFileSync(`${f.root}/starts`, 'utf8')).toBe('2');
-  expect(result.stdout.toString()).toContain('started backend-bun-1');
+  expect(result.stdout.toString()).toContain('started backend-bun-2');
 });
 
 function nightWithThread(inputAt: string) {
@@ -161,7 +163,7 @@ function nightWithThread(inputAt: string) {
 test('a busy Savor thread without recent input does not hold the night run back', () => {
   const result = nightWithThread('2026-10-25T00:30:00');
   expect(result.exitCode).toBe(0);
-  expect(result.stdout.toString()).toContain('started backend-bun-1');
+  expect(result.stdout.toString()).toContain('started backend-bun-2');
 });
 
 test('a busy Savor thread with recent input holds the night run back', () => {

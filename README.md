@@ -74,7 +74,8 @@ flowchart TD
 
   Logs and reports land in `results/runs/<id>/grade/`.
 - **Night runs.** A systemd user timer calls [`night.ts`](orchestrator/night.ts) every 15 minutes
-  between 01:30 and 02:15. It starts the next team only if no run is going and nobody has been
+  between 01:30 and 02:15. It starts the next team of the current round (`ROUND` and `TEAMS` in
+  `night.ts`; run IDs end in the round number) only if no run is going and nobody has been
   working in an interactive agent session for 20 minutes, sizes the time limit so the run ends by
   about 04:45, and checks after one minute that the run really started.
 - **Live view.** `bun orchestrator/live/server.ts` serves a read-only view of all runs on
