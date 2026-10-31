@@ -110,7 +110,7 @@ not checked in). Model `claude-opus-5-5` with effort `xhigh` in every run.
 | `backend-dart-1` | Dart Frog | 2026-10-23 23:30 | 88.7 / 195 | success | $19.55 | api+subscription | 18 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
 | `backend-python-1` | FastAPI, async SQLAlchemy | 2026-10-24 23:30 | 85.8 / 195 | success | $19.15 | api+subscription | 19 | [`0012200`](https://github.com/robinchoice/stackarena/commit/0012200ac7c51823da4b13385d48eb8dd5a40106) |
 
-### Grades
+### Backend grades
 
 | Run | Score | API | Contract | Load | p95 ms: sync-delta / sync-full / login / health | Requests/s |
 |---|---|---|---|---|---|---|
@@ -135,9 +135,48 @@ not checked in). Model `claude-opus-5-5` with effort `xhigh` in every run.
   `api` runs drew on prepaid API credits; `api+subscription` runs used up the credits and continued
   in the same session on a subscription, so the list price covers both parts.
 - **Spec** is the revision of this repository whose `spec/` and `harness/` the run started from.
-- No client team has run yet. The eight smoke runs of the setup (under 2 minutes and $0.20 each)
+- The eight smoke runs of the setup (under 2 minutes and $0.20 each)
   and three decompilation smoke runs on the mockup build (6 of 6 answers, $0.33–0.35 each) are left
   out.
+
+### Client runs
+
+Client teams build against the reference backend; every limit was 3.25 hours.
+
+| Run | Stack | Started (UTC) | Minutes / limit | Outcome | List price | Billing | Commits | Spec |
+|---|---|---|---|---|---|---|---|---|
+| `client-dart-1` | Flutter | 2026-10-27 00:30 | 136.1 / 195 | success | $24.14 | api+subscription | 28 | [`cf11caf`](https://github.com/robinchoice/stackarena/commit/cf11caf12dd635ec10efcd5ecc33b97cba40d413) |
+| `client-go-1` | Fyne 2.8, WebAssembly | 2026-10-28 23:24 | 144.3 / 195 | success | $30.44 | api+subscription | 30 | [`300ca8e`](https://github.com/robinchoice/stackarena/commit/300ca8e28bb9830f4070e2dab0bc74e9f200be82) |
+| `client-rust-1` | Dioxus 0.7 | 2026-10-29 01:51 | 139.6 / 195 | success | $31.62 | api+subscription | 29 | [`300ca8e`](https://github.com/robinchoice/stackarena/commit/300ca8e28bb9830f4070e2dab0bc74e9f200be82) |
+| `client-rust-core-1` | Rust core, native UIs | 2026-10-29 04:16 | 116.8 / 195 | success | $31.10 | api+subscription | 49 | [`300ca8e`](https://github.com/robinchoice/stackarena/commit/300ca8e28bb9830f4070e2dab0bc74e9f200be82) |
+| `client-kotlin-1` | Compose Multiplatform | 2026-10-29 06:14 | 135.4 / 195 | success | $21.59 | api+subscription | 27 | [`300ca8e`](https://github.com/robinchoice/stackarena/commit/300ca8e28bb9830f4070e2dab0bc74e9f200be82) |
+| `client-python-1` | Flet 1.0 | 2026-10-29 08:42 | 142.7 / 195 | success | $23.68 | api+subscription | 30 | [`300ca8e`](https://github.com/robinchoice/stackarena/commit/300ca8e28bb9830f4070e2dab0bc74e9f200be82) |
+| `client-svelte-tauri-1` | SvelteKit, Tauri 2 | 2026-10-29 11:08 | 81.0 / 195 | success | $23.87 | api+subscription | 27 | [`da33fff`](https://github.com/robinchoice/stackarena/commit/da33fff588f49c596b0f5e141ff68b60c777a7db) |
+| `client-svelte-electron-1` | SvelteKit, Electron, Capacitor | 2026-10-29 12:30 | 54.9 / 195 | success | $16.18 | api+subscription | 24 | [`da33fff`](https://github.com/robinchoice/stackarena/commit/da33fff588f49c596b0f5e141ff68b60c777a7db) |
+| `client-react-1` | Expo, React Native Web, Tauri | 2026-10-29 13:26 | 83.4 / 195 | success | $31.91 | api+subscription | 31 | [`da33fff`](https://github.com/robinchoice/stackarena/commit/da33fff588f49c596b0f5e141ff68b60c777a7db) |
+
+### Client grades
+
+| Run | Score | E2E | CLI (info) | Decompilation web / Linux (info) |
+|---|---|---|---|---|
+| `client-dart-1` | **1.000** | 1.000 (42/42) | 11/11 | 100% (6/6) / 47% (2.83/6) |
+| `client-go-1` | **1.000** | 1.000 (42/42) | 11/11 | 97% (5.83/6) / 95% (5.67/6) |
+| `client-rust-1` | **1.000** | 1.000 (42/42) | 7/8 | 97% (5.83/6) / 97% (5.83/6) |
+| `client-rust-core-1` | **1.000** | 1.000 (42/42) | 11/11 | 100% (6/6) / 100% (6/6) |
+| `client-kotlin-1` | **0.605** | 0.605 (26/43) | – | 100% (6/6) / 97% (5.83/6) |
+| `client-python-1` | **1.000** | 1.000 (42/42) | 11/11 | 100% (6/6) / 100% (6/6) |
+| `client-svelte-tauri-1` | **1.000** | 1.000 (42/42) | 11/11 | 100% (6/6) / 100% (6/6) |
+| `client-svelte-electron-1` | **1.000** | 1.000 (42/42) | – | 100% (6/6) / 100% (6/6) |
+| `client-react-1` | **1.000** | 1.000 (42/42) | – | 100% (6/6) / 100% (6/6) |
+
+- **Score** is the E2E part: Playwright UI scenarios against the team's web build
+  (`serve-web.sh`), given as score (passed/total). Skipped scenarios do not count. Every team but
+  `client-kotlin-1` passes all of them, so the score separates only Kotlin so far.
+- **CLI** is info only: the CLI tests of `harness/cli/` against a `cli.sh`, where a team ships one.
+  Only `client/rust-core` was asked for a CLI.
+- **Decompilation** is info only: the share of the six questions an agent without the source
+  answered correctly from the shipped build (partial credit per question), for web and Linux.
+  Each analysis of a team took 1–7 minutes per target and $1.15–3.37 in total.
 
 ## Running it
 
